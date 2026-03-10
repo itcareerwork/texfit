@@ -179,8 +179,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // 4. Сохраняем один раз
         if (newTitlesIndices.isNotEmpty()) {
-            val folderUri = getFolderUri() ?: return
-            val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
+            val folder = getFolderDocumentFile() ?: return
             updateTitlesAndSave(folder, newTitlesIndices, items)
             Toast.makeText(this, "Найдено файлов: $foundCount", Toast.LENGTH_SHORT).show()
         } else {
@@ -197,11 +196,7 @@ class SettingsActivity : AppCompatActivity() {
 
         try {
             // Читаем существующий JSON или создаем новый
-            val json = configFile.uri?.let { uri ->
-                contentResolver.openInputStream(uri)?.use { inputStream ->
-                    JSONObject(inputStream.bufferedReader().readText())
-                }
-            } ?: JSONObject()
+            val json = readConfigJson(configFile) ?: JSONObject()
 
             // Обновляем titles - заменяем весь массив
             val titlesArray = JSONArray()
@@ -278,8 +273,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun addSingleFile(uri: Uri) {
-        val folderUri = getFolderUri() ?: return
-        val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
+        val folder = getFolderDocumentFile() ?: return
         try {
             val pickedFile = DocumentFile.fromSingleUri(this, uri) ?: return
             val name = pickedFile.name ?: "video.mp4"
@@ -341,41 +335,39 @@ class SettingsActivity : AppCompatActivity() {
         }
         
         try {
-            contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
-                val json = JSONObject(inputStream.bufferedReader().readText())
-                val headersJson = json.optJSONObject("headers")
+            val json = readConfigJson(configFile) ?: return
+            val headersJson = json.optJSONObject("headers")
                 if (headersJson != null) {
                     hColor.text = headersJson.optString("col", "Цвет"); hCat1.text = headersJson.optString("cat1", "Сеанс")
                     hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Файлы")
                     hSize.text = headersJson.optString("size", "Размер"); hNote.text = headersJson.optString("note", "Прим.")
-                }
-
-                sessionOptions = mutableListOf()
-                json.optJSONArray("session_options")?.let { arr ->
-                    for (i in 0 until arr.length()) sessionOptions.add(arr.getString(i))
-                }
-                exerciseOptions = mutableListOf()
-                json.optJSONArray("exercise_options")?.let { arr ->
-                    for (i in 0 until arr.length()) exerciseOptions.add(arr.getString(i))
-                }
-
-                categoryState = mutableMapOf()
-                val stateObj = json.optJSONObject("category_state")
-                stateObj?.keys()?.forEach { key ->
-                    categoryState[key] = stateObj.getString(key)
-                }
-                exerciseOptions.forEach { ex ->
-                    if (!categoryState.containsKey(ex)) categoryState[ex] = "000"
-                }
-
-                val array = json.optJSONArray("video_items") ?: JSONArray()
-                val items = mutableListOf<VideoItem>()
-                for (i in 0 until array.length()) {
-                    items.add(VideoItem.fromJson(array.getJSONObject(i), sessionOptions, exerciseOptions))
-                }
-                adapter.submitList(items)
-                updateTopInputUI()
             }
+            
+            sessionOptions = mutableListOf()
+            json.optJSONArray("session_options")?.let { arr ->
+                for (i in 0 until arr.length()) sessionOptions.add(arr.getString(i))
+            }
+            exerciseOptions = mutableListOf()
+            json.optJSONArray("exercise_options")?.let { arr ->
+                for (i in 0 until arr.length()) exerciseOptions.add(arr.getString(i))
+            }
+
+            categoryState = mutableMapOf()
+            val stateObj = json.optJSONObject("category_state")
+            stateObj?.keys()?.forEach { key ->
+                categoryState[key] = stateObj.getString(key)
+            }
+            exerciseOptions.forEach { ex ->
+                if (!categoryState.containsKey(ex)) categoryState[ex] = "000"
+            }
+
+            val array = json.optJSONArray("video_items") ?: JSONArray()
+            val items = mutableListOf<VideoItem>()
+            for (i in 0 until array.length()) {
+                items.add(VideoItem.fromJson(array.getJSONObject(i), sessionOptions, exerciseOptions))
+            }
+            adapter.submitList(items)
+            updateTopInputUI()
         } catch (e: Exception) { 
             Log.e(TAG, "Ошибка загрузки конфигурации", e)
             Toast.makeText(this, "Ошибка чтения настроек", Toast.LENGTH_SHORT).show()
@@ -383,8 +375,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun performFullRefresh() {
-        val folderUri = getFolderUri() ?: return
-        val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
+        val folder = getFolderDocumentFile() ?: return
         val currentItems = adapter.currentList
         val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
         val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
@@ -584,8 +575,7 @@ class SettingsActivity : AppCompatActivity() {
             private var alertDialog: AlertDialog? = null
 
             private fun saveAndRefresh(newList: List<VideoItem>) {
-                val folderUri = getFolderUri() ?: return
-                val folder = DocumentFile.fromTreeUri(this@SettingsActivity, folderUri) ?: return
+                val folder = getFolderDocumentFile() ?: return
                 saveToConfig(folder, newList); loadUIFromConfig()
             }
 
@@ -686,10 +676,25 @@ class SettingsActivity : AppCompatActivity() {
             private fun updateItem(pos: Int, newItem: VideoItem) {
                 val newList = currentList.toMutableList()
                 newList[pos] = newItem
-                val folderUri = getFolderUri() ?: return
-                val folder = DocumentFile.fromTreeUri(this@SettingsActivity, folderUri) ?: return
+                val folder = getFolderDocumentFile() ?: return
                 saveToConfig(folder, newList); loadUIFromConfig()
             }
+        }
+    }
+    
+    private fun getFolderDocumentFile(): DocumentFile? {
+        val folderUri = getFolderUri() ?: return null
+        return DocumentFile.fromTreeUri(this, folderUri)
+    }
+
+    private fun readConfigJson(configFile: DocumentFile): JSONObject? {
+        return try {
+            contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
+                JSONObject(inputStream.bufferedReader().readText())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения конфигурации", e)
+            null
         }
     }
 }
