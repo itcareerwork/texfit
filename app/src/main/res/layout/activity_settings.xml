@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".SettingsActivity">
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="4dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingEnd="8dp">
+
+                <EditText
+                    android:id="@+id/et_top_input"
+                    android:layout_width="0dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:focusable="false"
+                    android:clickable="false"
+                    android:longClickable="false"
+                    android:maxLines="1"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_launch"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="Запуск"
+                    android:textSize="12sp"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/table_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#EEEEEE"
+                android:gravity="center_vertical"
+                android:minHeight="24dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/header_color"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.3"
+                    android:gravity="center"
+                    android:text="Цвет"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_cat1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.8"
+                    android:gravity="center"
+                    android:text="Сеанс"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_num2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.4"
+                    android:gravity="center"
+                    android:text="№"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_cat2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.6"
+                    android:gravity="center"
+                    android:text="Упражнение"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_num3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.4"
+                    android:gravity="center"
+                    android:text="№"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_cat3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2.4"
+                    android:gravity="center"
+                    android:text="Файлы"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_size"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:gravity="center"
+                    android:text="Размер"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+                <TextView
+                    android:id="@+id/header_note"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2.0"
+                    android:gravity="center"
+                    android:text="Прим."
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/mp4_files_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/white"
+                android:nestedScrollingEnabled="false" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp">
+
+                <ImageButton
+                    android:id="@+id/btn_add_folder"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="@drawable/btn_round_bg"
+                    android:contentDescription="@string/add_folder"
+                    android:src="@android:drawable/ic_input_add"
+                    android:scaleType="centerInside"
+                    android:padding="4dp" />
+
+                <TextView
+                    android:id="@+id/tv_set_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:minWidth="60dp"
+                    android:text="00:00"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/selected_folder_path_text_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_marginBottom="32dp"
+                android:text="Папка не выбрана"
+                android:textSize="10sp" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

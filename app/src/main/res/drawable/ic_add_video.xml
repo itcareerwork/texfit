@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Белый корпус файла с зеленым контуром -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#4CAF50"
+        android:strokeWidth="1.5"
+        android:pathData="M6,2h9l5,5v13c0,1.1 -0.9,2 -2,2H6c-1.1,0 -2,-0.9 -2,-2V4c0,-1.1 0.9,-2 2,-2z" />
+
+    <!-- Зеленый плюс: смещен на 1 влево и 1 вниз относительно предыдущего состояния -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M17,17h-2v3h-2v-3h-3v-2h3V12h2v3h3v2z" />
+</vector>

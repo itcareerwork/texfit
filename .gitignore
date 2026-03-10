@@ -1,0 +1,12 @@
+.kotlin/
+.pocketcoder/
+*.log
+*.apk
+*.aab
+build/
+.gradle/
+.DS_Store
+*.iml
+*.ipr
+*.iws
+*.idea/

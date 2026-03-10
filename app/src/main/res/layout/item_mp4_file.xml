@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="32dp"
+        android:orientation="horizontal">
+
+        <!-- 1. Цвет (Индикатор) -->
+        <View
+            android:id="@+id/col_color_indicator"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0.3"
+            android:contentDescription="@string/color_indicator" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 2. Сеанс (включая его №) -->
+        <TextView
+            android:id="@+id/col_session_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.8"
+            android:paddingStart="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:background="?attr/selectableItemBackground" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 3. № Упражнения -->
+        <TextView
+            android:id="@+id/col_num_exercise"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.4"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:background="?attr/selectableItemBackground" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 4. Упражнение -->
+        <TextView
+            android:id="@+id/col_exercise_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.6"
+            android:paddingStart="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:background="?attr/selectableItemBackground" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 5. № Файла (в категории) -->
+        <TextView
+            android:id="@+id/col_num_file"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.4"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:background="?attr/selectableItemBackground" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 6. Файл -->
+        <TextView
+            android:id="@+id/col_file_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2.4"
+            android:paddingStart="2dp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="11sp" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 7. Размер -->
+        <TextView
+            android:id="@+id/col_file_size"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.8"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="10sp" />
+
+        <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
+
+        <!-- 8. Примечание -->
+        <TextView
+            android:id="@+id/col_note"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2.0"
+            android:paddingStart="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:background="?attr/selectableItemBackground" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#CCCCCC" />
+
+</LinearLayout>
