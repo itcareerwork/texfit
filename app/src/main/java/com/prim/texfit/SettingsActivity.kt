@@ -140,7 +140,7 @@ class SettingsActivity : AppCompatActivity() {
         val items = adapter.currentList
         val activeItems = items.filter { it.isComplete() }
         if (activeItems.isEmpty()) {
-            Toast.makeText(this, "Нет активных упражнений", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -181,9 +181,9 @@ class SettingsActivity : AppCompatActivity() {
         if (newTitlesIndices.isNotEmpty()) {
             val folder = getFolderDocumentFile() ?: return
             updateTitlesAndSave(folder, newTitlesIndices, items)
-            Toast.makeText(this, "Найдено файлов: $foundCount", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.files_found_count, foundCount), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "Файлы не найдены", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.files_not_found), Toast.LENGTH_SHORT).show()
         }
 
         // 5. Обновляем UI
@@ -255,9 +255,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showAddMenu(view: View) {
         val popup = PopupMenu(this, view)
-        popup.menu.add(0, 1, 0, "Папка").setIcon(R.drawable.ic_add_folder)
-        popup.menu.add(0, 2, 1, "Файл").setIcon(R.drawable.ic_add_video)
-        popup.menu.add(0, 3, 2, "Обновить").setIcon(R.drawable.ic_refresh_custom)
+        popup.menu.add(0, 1, 0, getString(R.string.menu_folder)).setIcon(R.drawable.ic_add_folder)
+        popup.menu.add(0, 2, 1, getString(R.string.menu_file)).setIcon(R.drawable.ic_add_video)
+        popup.menu.add(0, 3, 2, getString(R.string.menu_refresh)).setIcon(R.drawable.ic_refresh_custom)
 
         popup.applyPopupForceShowIcon()
 
@@ -278,7 +278,7 @@ class SettingsActivity : AppCompatActivity() {
             val pickedFile = DocumentFile.fromSingleUri(this, uri) ?: return
             val name = pickedFile.name ?: "video.mp4"
             if (!name.endsWith(".mp4", ignoreCase = true)) {
-                Toast.makeText(this, "Файл не mp4", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.file_not_mp4), Toast.LENGTH_SHORT).show()
                 return
             }
             val currentItems = adapter.currentList.toMutableList()
@@ -311,13 +311,13 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadSelectedTime() {
         tvSetTime.text = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(SELECTED_TIME_KEY, "00:00")
+            .getString(SELECTED_TIME_KEY, getString(R.string.time_default))
     }
 
     private fun loadAndDisplaySelectedFolder() { getFolderUri()?.let { displaySelectedFolder(it) } }
 
     private fun displaySelectedFolder(uri: Uri) {
-        selectedFolderPathTextView.text = uri.path ?: "Папка выбрана"
+        selectedFolderPathTextView.text = uri.path ?: getString(R.string.folder_selected)
     }
 
     private fun getFolderUri(): Uri? = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -370,7 +370,7 @@ class SettingsActivity : AppCompatActivity() {
             updateTopInputUI()
         } catch (e: Exception) { 
             Log.e(TAG, "Ошибка загрузки конфигурации", e)
-            Toast.makeText(this, "Ошибка чтения настроек", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_read_settings), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -386,7 +386,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         saveToConfig(folder, updatedItems)
         loadUIFromConfig()
-        Toast.makeText(this, "Обновлено", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
     }
 
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
@@ -489,12 +489,12 @@ class SettingsActivity : AppCompatActivity() {
 
                 sN.setOnClickListener { showOptionsDialog("Сеанс", sessionOptions, pos) { showAddSessionDialog(pos) } }
                 nE.setOnClickListener { 
-                    if (getItem(pos).sessionName.isEmpty()) Toast.makeText(this@SettingsActivity, "Сначала выберите сеанс", Toast.LENGTH_SHORT).show() 
+                    if (getItem(pos).sessionName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() 
                     else showExerciseNumPopup(pos) 
                 }
                 eN.setOnClickListener { showOptionsDialog("Упражнение", exerciseOptions, pos) { showAddExerciseDialog(pos) } }
                 nF.setOnClickListener { 
-                    if (getItem(pos).exerciseName.isEmpty()) Toast.makeText(this@SettingsActivity, "Сначала выберите упражнение", Toast.LENGTH_SHORT).show() 
+                    if (getItem(pos).exerciseName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_exercise_first), Toast.LENGTH_SHORT).show() 
                     else showFileNumPopup(pos) 
                 }
                 note.setOnClickListener { showNoteEditDialog(pos) }
@@ -503,7 +503,7 @@ class SettingsActivity : AppCompatActivity() {
             private fun showOptionsDialog(title: String, options: MutableList<String>, pos: Int, onAdd: () -> Unit) {
                 val dialogView = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16) }
                 val listView = ListView(this@SettingsActivity)
-                val displayOptions = mutableListOf("Пусто"); displayOptions.addAll(options)
+                val displayOptions = mutableListOf(getString(R.string.empty_option)); displayOptions.addAll(options)
                 val listAdapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, displayOptions)
                 listView.adapter = listAdapter
                 listView.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -520,10 +520,11 @@ class SettingsActivity : AppCompatActivity() {
                 listView.setOnItemLongClickListener { _, _, i, _ ->
                     if (i == 0) return@setOnItemLongClickListener true
                     val value = displayOptions[i]
-                    val builder = AlertDialog.Builder(this@SettingsActivity).setTitle(if (title == "Упражнение") "Упражнение: $value" else "Удалить вариант?")
+                    val builder = AlertDialog.Builder(this@SettingsActivity)
+                        .setTitle(if (title == "Упражнение") getString(R.string.exercise_title_format, value) else getString(R.string.delete_option_title))
                     if (title == "Упражнение") {
                         val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }
-                        val input = EditText(this@SettingsActivity).apply { hint = "Счетчик (напр. 000)"; setText(categoryState[value] ?: "000"); inputType = InputType.TYPE_CLASS_NUMBER }
+                        val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.counter_hint); setText(categoryState[value] ?: "000"); inputType = InputType.TYPE_CLASS_NUMBER }
                         layout.addView(input); builder.setView(layout)
                         builder.setNeutralButton("Удалить") { _, _ ->
                             options.remove(value); categoryState.remove(value)
@@ -547,11 +548,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     builder.setNegativeButton("Отмена", null)
                     val dlg = builder.create()
-                    dlg.setOnShowListener {
-                        dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark))
-                        dlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark))
-                        if (title == "Упражнение") dlg.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
-                    }
+                    dlg.setOnShowListener { tintDialogButtons(dlg, neutralIsDestructive = title == "Упражнение") }
                     dlg.show(); true
                 }
                 dialogView.addView(listView)
@@ -581,12 +578,13 @@ class SettingsActivity : AppCompatActivity() {
 
             private fun showExerciseNumPopup(pos: Int) {
                 val popup = PopupMenu(this@SettingsActivity, nE)
-                popup.menu.add("Пусто")
+                popup.menu.add(getString(R.string.empty_option))
                 val currentSess = getItem(pos).sessionName
                 val usedNums = currentList.filter { it.sessionName == currentSess && it.sessionName.isNotEmpty() }.map { it.numExercise }.toSet()
-                for (i in 1..99) { val num = String.format(Locale.US, "%02d", i); if (!usedNums.contains(num)) popup.menu.add(num) }
-                popup.setOnMenuItemClickListener { 
-                    updateItem(pos, getItem(pos).copy(numExercise = if (it.title == "Пусто") "" else it.title.toString()))
+                val freeNums = generateFreeNumbers(usedNums, 1, 99, "%02d")
+                freeNums.forEach { popup.menu.add(it) }
+                popup.setOnMenuItemClickListener {
+                    updateItem(pos, getItem(pos).copy(numExercise = if (it.title == getString(R.string.empty_option)) "" else it.title.toString()))
                     updateTopInputUI()
                     true 
                 }
@@ -596,11 +594,12 @@ class SettingsActivity : AppCompatActivity() {
 
             private fun showFileNumPopup(pos: Int) {
                 val popup = PopupMenu(this@SettingsActivity, nF)
-                popup.menu.add("Пусто")
+                popup.menu.add(getString(R.string.empty_option))
                 val usedNums = currentList.filter { it.exerciseName == getItem(pos).exerciseName && it.exerciseName.isNotEmpty() }.map { it.numFile }.toSet()
-                for (i in 1..999) { val num = String.format(Locale.US, "%03d", i); if (!usedNums.contains(num)) popup.menu.add(num) }
-                popup.setOnMenuItemClickListener { 
-                    updateItem(pos, getItem(pos).copy(numFile = if (it.title == "Пусто") "" else it.title.toString()))
+                val freeNums = generateFreeNumbers(usedNums, 1, 999, "%03d")
+                freeNums.forEach { popup.menu.add(it) }
+                popup.setOnMenuItemClickListener {
+                    updateItem(pos, getItem(pos).copy(numFile = if (it.title == getString(R.string.empty_option)) "" else it.title.toString()))
                     updateTopInputUI()
                     true 
                 }
@@ -610,11 +609,15 @@ class SettingsActivity : AppCompatActivity() {
 
             private fun showNoteEditDialog(pos: Int) {
                 val input = EditText(this@SettingsActivity).apply { setText(getItem(pos).note) }
-                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle("Примечание").setView(input).setPositiveButton("OK") { _, _ -> updateItem(pos, getItem(pos).copy(note = input.text.toString())) }.setNegativeButton("ОТМЕНА", null).create()
-                dialog.setOnShowListener { 
-                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark))
-                    dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark)) 
-                }
+                val dialog = AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle(getString(R.string.note_title))
+                    .setView(input)
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
+                        updateItem(pos, getItem(pos).copy(note = input.text.toString()))
+                    }
+                    .setNegativeButton(getString(R.string.dialog_cancel), null)
+                    .create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }
                 dialog.show()
             }
 
@@ -636,40 +639,55 @@ class SettingsActivity : AppCompatActivity() {
                     pop.setOnMenuItemClickListener { selectedNum = it.title.toString(); numDisplay.text = "Выбран № $selectedNum"; true }; pop.show()
                 }
                 val nameInput = EditText(this@SettingsActivity).apply { hint = "Название" }
+                val nameHint = getString(R.string.name_hint)
+                nameInput.hint = nameHint
                 layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput)
-                val dialog = AlertDialog.Builder(this@SettingsActivity).setPositiveButton("OK") { _, _ -> 
-                    val name = nameInput.text.toString().trim()
-                    if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, "Выберите номер", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
-                    val usedNames = sessionOptions.map { it.substringAfter(" ") }.toSet()
-                    if (usedNames.contains(name)) { Toast.makeText(this@SettingsActivity, "Название должно быть уникальным", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
-                    val combined = "$selectedNum $name"
-                    if (!sessionOptions.contains(combined)) { sessionOptions.add(combined); sessionOptions.sort() }
-                    updateItem(pos, getItem(pos).copy(sessionName = combined)) 
-                }.setNegativeButton("ОТМЕНА", null).setView(layout).setTitle("Новый сеанс").create()
-                dialog.setOnShowListener { 
-                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark))
-                    dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark)) 
-                }
+                val dialog = AlertDialog.Builder(this@SettingsActivity)
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
+                        val name = nameInput.text.toString().trim()
+                        if (selectedNum.isEmpty()) {
+                            Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show()
+                            return@setPositiveButton
+                        }
+                        val usedNames = sessionOptions.map { it.substringAfter(" ") }.toSet()
+                        if (usedNames.contains(name)) {
+                            Toast.makeText(this@SettingsActivity, getString(R.string.name_must_be_unique), Toast.LENGTH_SHORT).show()
+                            return@setPositiveButton
+                        }
+                        val combined = "$selectedNum $name"
+                        if (!sessionOptions.contains(combined)) {
+                            sessionOptions.add(combined)
+                            sessionOptions.sort()
+                        }
+                        updateItem(pos, getItem(pos).copy(sessionName = combined))
+                    }
+                    .setNegativeButton(getString(R.string.dialog_cancel), null)
+                    .setView(layout)
+                    .setTitle(getString(R.string.new_session))
+                    .create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }
                 dialog.show()
             }
 
             private fun showAddExerciseDialog(pos: Int) {
-                val input = EditText(this@SettingsActivity).apply { hint = "Название упражнения" }
-                val dialog = AlertDialog.Builder(this@SettingsActivity).setPositiveButton("OK") { _, _ -> 
-                    val name = input.text.toString().trim()
-                    if (name.isNotEmpty()) { 
-                        if (!exerciseOptions.contains(name)) { 
-                            exerciseOptions.add(name)
-                            exerciseOptions.sort()
-                            categoryState[name] = "000" // Всегда 000 при добавлении
+                val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }
+                val dialog = AlertDialog.Builder(this@SettingsActivity)
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
+                        val name = input.text.toString().trim()
+                        if (name.isNotEmpty()) {
+                            if (!exerciseOptions.contains(name)) {
+                                exerciseOptions.add(name)
+                                exerciseOptions.sort()
+                                categoryState[name] = "000" // Всегда 000 при добавлении
+                            }
+                            updateItem(pos, getItem(pos).copy(exerciseName = name))
                         }
-                        updateItem(pos, getItem(pos).copy(exerciseName = name)) 
-                    } 
-                }.setNegativeButton("ОТМЕНА", null).setView(input).setTitle("Новое упражнение").create()
-                dialog.setOnShowListener { 
-                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark))
-                    dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark)) 
-                }
+                    }
+                    .setNegativeButton(getString(R.string.dialog_cancel), null)
+                    .setView(input)
+                    .setTitle(getString(R.string.new_exercise))
+                    .create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }
                 dialog.show()
             }
 
@@ -696,6 +714,25 @@ class SettingsActivity : AppCompatActivity() {
             Log.e(TAG, "Ошибка чтения конфигурации", e)
             null
         }
+    }
+
+    private fun tintDialogButtons(dialog: AlertDialog, neutralIsDestructive: Boolean = false) {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            ?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+            ?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        if (neutralIsDestructive) {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
+        }
+    }
+
+    private fun generateFreeNumbers(used: Set<String>, from: Int, to: Int, format: String): List<String> {
+        val result = mutableListOf<String>()
+        for (i in from..to) {
+            val num = String.format(Locale.US, format, i)
+            if (!used.contains(num)) result.add(num)
+        }
+        return result
     }
 }
 

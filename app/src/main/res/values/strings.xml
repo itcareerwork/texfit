@@ -7,4 +7,39 @@
 
     <string name="add_folder">Добавить папку с видео</string>
     <string name="color_indicator">Индикатор статуса строки</string>
+
+    <string name="no_active_exercises">Нет активных упражнений</string>
+    <string name="files_found_count">Найдено файлов: %1$d</string>
+    <string name="files_not_found">Файлы не найдены</string>
+    <string name="file_not_mp4">Файл не mp4</string>
+
+    <string name="menu_folder">Папка</string>
+    <string name="menu_file">Файл</string>
+    <string name="menu_refresh">Обновить</string>
+
+    <string name="time_default">00:00</string>
+    <string name="folder_selected">Папка выбрана</string>
+    <string name="folder_not_selected">Папка не выбрана</string>
+
+    <string name="error_read_settings">Ошибка чтения настроек</string>
+    <string name="updated">Обновлено</string>
+
+    <string name="note_title">Примечание</string>
+    <string name="dialog_ok">OK</string>
+    <string name="dialog_cancel">ОТМЕНА</string>
+    <string name="new_session">Новый сеанс</string>
+    <string name="new_exercise">Новое упражнение</string>
+    <string name="exercise_title_format">Упражнение: %1$s</string>
+    <string name="delete_option_title">Удалить вариант?</string>
+    <string name="counter_hint">Счетчик (напр. 000)</string>
+    <string name="delete">Удалить</string>
+    <string name="save">Сохранить</string>
+    <string name="name_hint">Название</string>
+    <string name="select_number">Выберите номер</string>
+    <string name="name_must_be_unique">Название должно быть уникальным</string>
+    <string name="exercise_name_hint">Название упражнения</string>
+
+    <string name="empty_option">Пусто</string>
+    <string name="select_session_first">Сначала выберите сеанс</string>
+    <string name="select_exercise_first">Сначала выберите упражнение</string>
 </resources>
