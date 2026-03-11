@@ -123,7 +123,7 @@ class SettingsActivity : AppCompatActivity() {
         hNote = findViewById(R.id.header_note)
 
         findViewById<View>(R.id.btn_launch).setOnClickListener { 
-            performLaunchStep()
+            // Функция сортировки и выборки удалена для замены на новую реализацию
         }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
@@ -136,89 +136,6 @@ class SettingsActivity : AppCompatActivity() {
         loadAndDisplaySelectedFolder()
         loadSelectedTime()
         loadUIFromConfig()
-    }
-
-    private fun performLaunchStep() {
-        val items = adapter.currentList
-        val activeItems = items.filter { it.isComplete() }
-        if (activeItems.isEmpty()) {
-            Toast.makeText(this, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // 1. Сортировка: Сеанс (№) -> Упражнение (№)
-        val sortedItems = activeItems.sortedWith(compareBy({
-            it.sessionName.takeWhile { c -> c.isDigit() }.toIntOrNull() ?: 999
-        }, {
-            it.numExercise.toIntOrNull() ?: 999
-        }))
-
-        // 2. Оптимизация: создаем мапу для быстрого поиска файлов по (упражнение, номер)
-        val fileMap = items.groupBy { it.exerciseName to it.numFile }
-            .mapValues { entry -> entry.value.map { it to items.indexOf(it) } }
-
-        // 3. Каскадный поиск файлов n+1
-        val newTitlesIndices = mutableListOf<Int>()
-        var foundCount = 0
-        
-        for (item in sortedItems) {
-            val currentNum = categoryState[item.exerciseName]?.toIntOrNull() ?: 0
-            val nextNum = currentNum + 1
-            val nextNumStr = String.format(Locale.US, "%03d", nextNum)
-
-            // Быстрый поиск через мапу
-            val key = item.exerciseName to nextNumStr
-            if (fileMap.containsKey(key)) {
-                // Берем первый найденный файл
-                val (foundItem, foundIndex) = fileMap[key]!!.first()
-                newTitlesIndices.add(foundIndex)
-                foundCount++
-            }
-
-            // Всегда обновляем categoryState на n+1
-            categoryState[item.exerciseName] = nextNumStr
-        }
-
-        // 4. Сохраняем один раз
-        if (newTitlesIndices.isNotEmpty()) {
-            val folder = getFolderDocumentFile() ?: return
-            updateTitlesAndSave(folder, newTitlesIndices, items)
-            Toast.makeText(this, getString(R.string.files_found_count, foundCount), Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, getString(R.string.files_not_found), Toast.LENGTH_SHORT).show()
-        }
-
-        // 5. Обновляем UI
-        updateTopInputUI()
-    }
-
-    private fun updateTitlesAndSave(folder: DocumentFile, newTitlesIndices: List<Int>, items: List<VideoItem>) {
-        val configFile = findConfigFileForRead(folder) ?: return
-
-        try {
-            // Читаем существующий JSON или создаем новый
-            val json = readConfigJson(configFile) ?: JSONObject()
-
-            // Обновляем titles - заменяем весь массив
-            val titlesArray = JSONArray()
-            newTitlesIndices.forEach { index -> titlesArray.put(index) }
-            json.put("titles", titlesArray)
-
-            // Обновляем video_items
-            val videoArray = JSONArray()
-            items.forEach { videoArray.put(it.toJson(sessionOptions, exerciseOptions)) }
-            json.put("video_items", videoArray)
-            
-            // Обновляем category_state
-            val stateObj = JSONObject()
-            categoryState.forEach { (k, v) -> stateObj.put(k, v) }
-            json.put("category_state", stateObj)
-
-            // Сохраняем с компактным форматированием (2 пробела вместо 4)
-            contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
-                OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(2)) }
-            }
-        } catch (e: Exception) { Log.e(TAG, "Update titles error", e) }
     }
 
     private fun formatFileSize(size: Long): String {
