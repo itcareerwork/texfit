@@ -56,6 +56,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val SELECTED_TIME_KEY = "selectedTime"
         private const val TAG = "SettingsActivity"
         private const val CONFIG_FILE_NAME = "texfit.cfg"
+        private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
     }
 
     private lateinit var selectedFolderPathTextView: TextView
@@ -94,7 +95,7 @@ class SettingsActivity : AppCompatActivity() {
         override fun createIntent(context: Context, input: Array<String>): Intent {
             val intent = super.createIntent(context, input)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                getFolderUri()?.let { intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, it) }
+                getFolderUri()?.let { intent.putExtra(EXTRA_INITIAL_URI, it) }
             }
             return intent
         }
@@ -123,7 +124,7 @@ class SettingsActivity : AppCompatActivity() {
         hNote = findViewById(R.id.header_note)
 
         findViewById<View>(R.id.btn_launch).setOnClickListener { 
-            // Функция сортировки и выборки удалена для замены на новую реализацию
+            performLaunchStep()
         }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
@@ -138,6 +139,69 @@ class SettingsActivity : AppCompatActivity() {
         loadUIFromConfig()
     }
 
+    private fun applySortingAndSelectionLogic(): List<VideoItem> {
+        val sourceTable = adapter.currentList.filter { it.isComplete() }
+        val resultTable = mutableListOf<VideoItem>()
+        val changedInThisIteration = mutableSetOf<String>()
+        
+        val categoryStatesInt = categoryState.mapValues { it.value.toIntOrNull() ?: 0 }.toMutableMap()
+
+        val maxLimits = sourceTable.groupBy { it.exerciseName }
+            .mapValues { (_, rows) -> rows.maxOf { it.numFile.toIntOrNull() ?: 0 } }
+
+        val virtualTable = sourceTable.sortedWith(
+            compareBy({ it.sessionName }, { it.numExercise }, { it.numFile })
+        )
+
+        for (row in virtualTable) {
+            val name = row.exerciseName
+            val limit = maxLimits[name] ?: 0
+            val currentState = categoryStatesInt.getOrPut(name) { 0 }
+
+            var nextStep = currentState + 1
+            if (nextStep > limit) {
+                nextStep = 0 
+            }
+            if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
+                categoryStatesInt[name] = nextStep
+                changedInThisIteration.add(name)
+                resultTable.add(row)
+            }
+        }
+
+        for (name in maxLimits.keys) {
+            if (!changedInThisIteration.contains(name)) {
+                val limit = maxLimits[name] ?: 0
+                val currentState = categoryStatesInt.getOrPut(name) { 0 }
+                var finalStep = currentState + 1
+                if (finalStep > limit) {
+                    finalStep = 0
+                }
+                categoryStatesInt[name] = finalStep
+            }
+        }
+
+        categoryStatesInt.forEach { (k, v) ->
+            categoryState[k] = String.format(Locale.US, "%03d", v)
+        }
+
+        return resultTable
+    }
+
+    private fun performLaunchStep() {
+        val selectedItems = applySortingAndSelectionLogic()
+        updateTopInputUI()
+
+        if (selectedItems.isEmpty()) {
+            Toast.makeText(this, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, getString(R.string.files_found_count, selectedItems.size), Toast.LENGTH_SHORT).show()
+        }
+
+        val folder = getFolderDocumentFile() ?: return
+        saveToConfig(folder, adapter.currentList, selectedItems)
+    }
+
     private fun formatFileSize(size: Long): String {
         if (size <= 0) return ""
         val units = arrayOf("Б", "КБ", "МБ", "ГБ", "ТБ")
@@ -147,13 +211,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateTopInputUI() {
         val items = adapter.currentList
-        val currentActiveSet = items.filter { it.isComplete() }.map { it.exerciseName }.toSet()
-
-        categoryState.keys.forEach { key ->
-            if (key !in currentActiveSet) {
-                categoryState[key] = "000"
-            }
-        }
+        val completeItems = items.filter { it.isComplete() }
+        val currentActiveSet = completeItems.map { it.exerciseName }.toSet()
 
         activeExercisesOrder.removeAll { it !in currentActiveSet }
         currentActiveSet.forEach { if (it !in activeExercisesOrder) activeExercisesOrder.add(it) }
@@ -247,17 +306,17 @@ class SettingsActivity : AppCompatActivity() {
         
         val configFile = findConfigFileForRead(folder)
         if (configFile == null) {
-            Log.d(TAG, "loadUIFromConfig: Config not found in $folderUri")
+            Log.d(TAG, "loadUIFromConfig: Config not found")
             return
         }
         
         try {
             val json = readConfigJson(configFile) ?: return
             val headersJson = json.optJSONObject("headers")
-                if (headersJson != null) {
-                    hColor.text = headersJson.optString("col", "Цвет"); hCat1.text = headersJson.optString("cat1", "Сеанс")
-                    hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Файлы")
-                    hSize.text = headersJson.optString("size", "Размер"); hNote.text = headersJson.optString("note", "Прим.")
+            if (headersJson != null) {
+                hColor.text = headersJson.optString("col", "Цвет"); hCat1.text = headersJson.optString("cat1", "Сеанс")
+                hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Файлы")
+                hSize.text = headersJson.optString("size", "Размер"); hNote.text = headersJson.optString("note", "Прим.")
             }
             
             sessionOptions = mutableListOf()
@@ -287,7 +346,6 @@ class SettingsActivity : AppCompatActivity() {
             updateTopInputUI()
         } catch (e: Exception) { 
             Log.e(TAG, "Ошибка загрузки конфигурации", e)
-            Toast.makeText(this, getString(R.string.error_read_settings), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -306,32 +364,42 @@ class SettingsActivity : AppCompatActivity() {
         Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
     }
 
-    private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
+    private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>, selectedItems: List<VideoItem>? = null) {
         try {
-            val configFile = findOrCreateConfigFile(folder)
+            val configFile = findOrCreateConfigFile(folder) ?: return
+            val existingJson = readConfigJson(configFile) ?: JSONObject()
             
-            configFile?.let { file ->
-                val json = JSONObject().apply {
-                    val array = JSONArray()
-                    items.forEach { array.put(it.toJson(sessionOptions, exerciseOptions)) }
-                    put("video_items", array)
-                    put("session_options", JSONArray(sessionOptions))
-                    put("exercise_options", JSONArray(exerciseOptions))
-                    val stateObj = JSONObject()
-                    categoryState.forEach { (k, v) -> stateObj.put(k, v) }
-                    put("category_state", stateObj)
-                    put("training_time", tvSetTime.text.toString())
-                    put("folder_path", selectedFolderPathTextView.text.toString())
-                    val hObj = JSONObject().apply {
-                        put("col", hColor.text.toString()); put("cat1", hCat1.text.toString())
-                        put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString())
-                        put("size", hSize.text.toString()); put("note", hNote.text.toString())
+            val json = JSONObject().apply {
+                val array = JSONArray()
+                items.forEach { array.put(it.toJson(sessionOptions, exerciseOptions)) }
+                put("video_items", array)
+                put("session_options", JSONArray(sessionOptions))
+                put("exercise_options", JSONArray(exerciseOptions))
+                val stateObj = JSONObject()
+                categoryState.forEach { (k, v) -> stateObj.put(k, v) }
+                put("category_state", stateObj)
+                put("training_time", tvSetTime.text.toString())
+                put("folder_path", selectedFolderPathTextView.text.toString())
+                val hObj = JSONObject().apply {
+                    put("col", hColor.text.toString()); put("cat1", hCat1.text.toString())
+                    put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString())
+                    put("size", hColor.text.toString()); put("note", hNote.text.toString())
+                }
+                put("headers", hObj)
+                
+                if (selectedItems != null) {
+                    val titlesArray = JSONArray()
+                    selectedItems.forEach { 
+                        // Формируем полную строку для главного окна по образцу |1 Утро |01 бег |002 file.mp4 |
+                        titlesArray.put("| ${it.sessionName} | ${it.numExercise} ${it.exerciseName} | ${it.numFile} ${it.fileName} |")
                     }
-                    put("headers", hObj)
+                    put("titles", titlesArray)
+                } else if (existingJson.has("titles")) {
+                    put("titles", existingJson.getJSONArray("titles"))
                 }
-                contentResolver.openOutputStream(file.uri, "wt")?.use { outputStream ->
-                    OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
-                }
+            }
+            contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
+                OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
             }
         } catch (e: Exception) { Log.e(TAG, "Ошибка сохранения конфигурации", e) }
     }
@@ -594,7 +662,7 @@ class SettingsActivity : AppCompatActivity() {
                             if (!exerciseOptions.contains(name)) {
                                 exerciseOptions.add(name)
                                 exerciseOptions.sort()
-                                categoryState[name] = "000" // Всегда 000 при добавлении
+                                categoryState[name] = "000" 
                             }
                             updateItem(pos, getItem(pos).copy(exerciseName = name))
                         }
@@ -652,10 +720,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? {
-        // 1. Точное совпадение имени
         folder.findFile(CONFIG_FILE_NAME)?.let { return it }
-
-        // 2. Файлы, которые создал SAF: texfit.cfg.json, texfit.cfg (1).json и т.п.
         return folder.listFiles().firstOrNull { file ->
             val name = file.name ?: return@firstOrNull false
             name == CONFIG_FILE_NAME || name.startsWith("$CONFIG_FILE_NAME.")
@@ -663,9 +728,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? {
-        // Пытаемся переиспользовать уже существующий файл (включая варианты с .json)
         findConfigFileForRead(folder)?.let { return it }
-        // Иначе создаём новый
         return folder.createFile("application/json", CONFIG_FILE_NAME)
     }
 }
