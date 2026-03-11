@@ -75,6 +75,7 @@ class SettingsActivity : AppCompatActivity() {
     private var sessionOptions = mutableListOf<String>()
     private var exerciseOptions = mutableListOf<String>()
     private var categoryState = mutableMapOf<String, String>()
+    private var resetState = mutableMapOf<String, String>()
     private var activeExercisesOrder = mutableListOf<String>()
 
     private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -160,7 +161,7 @@ class SettingsActivity : AppCompatActivity() {
 
             var nextStep = currentState + 1
             if (nextStep > limit) {
-                nextStep = 0 
+                nextStep = resetState[name]?.toIntOrNull() ?: 0 
             }
             if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
                 categoryStatesInt[name] = nextStep
@@ -175,7 +176,7 @@ class SettingsActivity : AppCompatActivity() {
                 val currentState = categoryStatesInt.getOrPut(name) { 0 }
                 var finalStep = currentState + 1
                 if (finalStep > limit) {
-                    finalStep = 0
+                    finalStep = resetState[name]?.toIntOrNull() ?: 0
                 }
                 categoryStatesInt[name] = finalStep
             }
@@ -333,8 +334,16 @@ class SettingsActivity : AppCompatActivity() {
             stateObj?.keys()?.forEach { key ->
                 categoryState[key] = stateObj.getString(key)
             }
+            
+            resetState = mutableMapOf()
+            val resetObj = json.optJSONObject("reset_state")
+            resetObj?.keys()?.forEach { key ->
+                resetState[key] = resetObj.getString(key)
+            }
+
             exerciseOptions.forEach { ex ->
                 if (!categoryState.containsKey(ex)) categoryState[ex] = "000"
+                if (!resetState.containsKey(ex)) resetState[ex] = "000"
             }
 
             val array = json.optJSONArray("video_items") ?: JSONArray()
@@ -375,22 +384,27 @@ class SettingsActivity : AppCompatActivity() {
                 put("video_items", array)
                 put("session_options", JSONArray(sessionOptions))
                 put("exercise_options", JSONArray(exerciseOptions))
+                
                 val stateObj = JSONObject()
                 categoryState.forEach { (k, v) -> stateObj.put(k, v) }
                 put("category_state", stateObj)
+                
+                val resetObj = JSONObject()
+                resetState.forEach { (k, v) -> resetObj.put(k, v) }
+                put("reset_state", resetObj)
+
                 put("training_time", tvSetTime.text.toString())
                 put("folder_path", selectedFolderPathTextView.text.toString())
                 val hObj = JSONObject().apply {
                     put("col", hColor.text.toString()); put("cat1", hCat1.text.toString())
                     put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString())
-                    put("size", hColor.text.toString()); put("note", hNote.text.toString())
+                    put("size", hSize.text.toString()); put("note", hNote.text.toString())
                 }
                 put("headers", hObj)
                 
                 if (selectedItems != null) {
                     val titlesArray = JSONArray()
                     selectedItems.forEach { 
-                        // Формируем полную строку для главного окна по образцу |1 Утро |01 бег |002 file.mp4 |
                         titlesArray.put("| ${it.sessionName} | ${it.numExercise} ${it.exerciseName} | ${it.numFile} ${it.fileName} |")
                     }
                     put("titles", titlesArray)
@@ -498,6 +512,7 @@ class SettingsActivity : AppCompatActivity() {
                     else { 
                         updateItem(pos, item.copy(exerciseName = value, numFile = ""))
                         if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000" } 
+                        if (value.isNotEmpty() && !resetState.containsKey(value)) { resetState[value] = "000" }
                     }
                     updateTopInputUI(); alertDialog?.dismiss()
                 }
@@ -507,26 +522,70 @@ class SettingsActivity : AppCompatActivity() {
                     val builder = AlertDialog.Builder(this@SettingsActivity)
                         .setTitle(if (title == "Упражнение") getString(R.string.exercise_title_format, value) else getString(R.string.delete_option_title))
                     if (title == "Упражнение") {
-                        val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }
-                        val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.counter_hint); setText(categoryState[value] ?: "000"); inputType = InputType.TYPE_CLASS_NUMBER }
-                        layout.addView(input); builder.setView(layout)
+                        val layout = LinearLayout(this@SettingsActivity).apply { 
+                            orientation = LinearLayout.HORIZONTAL
+                            setPadding(40, 20, 40, 0)
+                            weightSum = 2f
+                        }
+
+                        // Левая часть
+                        val leftBox = LinearLayout(this@SettingsActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        }
+                        leftBox.addView(TextView(this@SettingsActivity).apply { 
+                            text = "Установить позицию\n\"$value\" в:"; textSize = 12f 
+                        })
+                        val leftValue = TextView(this@SettingsActivity).apply {
+                            text = categoryState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER
+                            setBackgroundResource(android.R.drawable.editbox_background_normal)
+                        }
+                        leftValue.setOnClickListener { v ->
+                            val pop = PopupMenu(this@SettingsActivity, v)
+                            for (j in 0..999) pop.menu.add(String.format(Locale.US, "%03d", j))
+                            pop.setOnMenuItemClickListener { itMenuItem -> leftValue.text = itMenuItem.title; true }
+                            pop.show()
+                        }
+                        leftBox.addView(leftValue)
+
+                        // Правая часть
+                        val rightBox = LinearLayout(this@SettingsActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                            setPadding(20, 0, 0, 0)
+                        }
+                        rightBox.addView(TextView(this@SettingsActivity).apply { 
+                            text = "В конце сбрасывать\n\"$value\" на:"; textSize = 12f 
+                        })
+                        val rightValue = TextView(this@SettingsActivity).apply {
+                            text = resetState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER
+                            setBackgroundResource(android.R.drawable.editbox_background_normal)
+                        }
+                        rightValue.setOnClickListener { v ->
+                            val pop = PopupMenu(this@SettingsActivity, v)
+                            pop.menu.add("000"); pop.menu.add("001")
+                            pop.setOnMenuItemClickListener { itMenuItem -> rightValue.text = itMenuItem.title; true }
+                            pop.show()
+                        }
+                        rightBox.addView(rightValue)
+
+                        layout.addView(leftBox); layout.addView(rightBox)
+                        builder.setView(layout)
+
                         builder.setNeutralButton("Удалить") { _, _ ->
-                            options.remove(value); categoryState.remove(value)
-                            val newList = currentList.map { 
-                                if (it.exerciseName == value) it.copy(exerciseName = "", numFile = "") else it 
-                            }
+                            options.remove(value); categoryState.remove(value); resetState.remove(value)
+                            val newList = currentList.map { if (it.exerciseName == value) it.copy(exerciseName = "", numFile = "") else it }
                             saveAndRefresh(newList)
                         }
                         builder.setPositiveButton("Сохранить") { _, _ ->
-                            categoryState[value] = input.text.toString().padStart(3, '0')
+                            categoryState[value] = leftValue.text.toString()
+                            resetState[value] = rightValue.text.toString()
                             saveAndRefresh(currentList)
                         }
                     } else {
                         builder.setMessage(value).setPositiveButton("Удалить") { _, _ ->
                             options.remove(value)
-                            val newList = currentList.map { 
-                                if (it.sessionName == value) it.copy(sessionName = "", numExercise = "") else it 
-                            }
+                            val newList = currentList.map { if (it.sessionName == value) it.copy(sessionName = "", numExercise = "") else it }
                             saveAndRefresh(newList)
                         }
                     }
@@ -663,6 +722,7 @@ class SettingsActivity : AppCompatActivity() {
                                 exerciseOptions.add(name)
                                 exerciseOptions.sort()
                                 categoryState[name] = "000" 
+                                resetState[name] = "000"
                             }
                             updateItem(pos, getItem(pos).copy(exerciseName = name))
                         }
