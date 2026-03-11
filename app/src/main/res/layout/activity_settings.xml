@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
     tools:context=".SettingsActivity">
 
     <androidx.core.widget.NestedScrollView
@@ -43,6 +44,7 @@
                     android:maxLines="1"
                     android:paddingStart="4dp"
                     android:paddingEnd="4dp"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="12sp" />
 
                 <Button
@@ -63,7 +65,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="#EEEEEE"
+                android:background="@color/table_header_bg"
                 android:gravity="center_vertical"
                 android:minHeight="24dp"
                 android:orientation="horizontal">
@@ -75,6 +77,7 @@
                     android:layout_weight="0.3"
                     android:gravity="center"
                     android:text="Цвет"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -87,6 +90,7 @@
                     android:layout_weight="1.8"
                     android:gravity="center"
                     android:text="Сеанс"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -99,6 +103,7 @@
                     android:layout_weight="0.4"
                     android:gravity="center"
                     android:text="№"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -111,6 +116,7 @@
                     android:layout_weight="1.6"
                     android:gravity="center"
                     android:text="Упражнение"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -123,6 +129,7 @@
                     android:layout_weight="0.4"
                     android:gravity="center"
                     android:text="№"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -135,6 +142,7 @@
                     android:layout_weight="2.4"
                     android:gravity="center"
                     android:text="Файлы"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -147,6 +155,7 @@
                     android:layout_weight="0.8"
                     android:gravity="center"
                     android:text="Размер"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
 
@@ -159,6 +168,7 @@
                     android:layout_weight="2.0"
                     android:gravity="center"
                     android:text="Прим."
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -200,6 +210,7 @@
                     android:gravity="center"
                     android:minWidth="60dp"
                     android:text="00:00"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="14sp" />
             </LinearLayout>
 

@@ -191,8 +191,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateTitlesAndSave(folder: DocumentFile, newTitlesIndices: List<Int>, items: List<VideoItem>) {
-        val configFile = folder.findFile(CONFIG_FILE_NAME) ?: folder.listFiles().find { it.name == CONFIG_FILE_NAME }
-        if (configFile == null) return
+        val configFile = findConfigFileForRead(folder) ?: return
 
         try {
             // Читаем существующий JSON или создаем новый
@@ -327,8 +326,7 @@ class SettingsActivity : AppCompatActivity() {
         val folderUri = getFolderUri() ?: return
         val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
         
-        val configFile = folder.findFile(CONFIG_FILE_NAME) ?: folder.listFiles().find { it.name == CONFIG_FILE_NAME }
-        
+        val configFile = findConfigFileForRead(folder)
         if (configFile == null) {
             Log.d(TAG, "loadUIFromConfig: Config not found in $folderUri")
             return
@@ -391,8 +389,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
         try {
-            val configFile = folder.findFile(CONFIG_FILE_NAME) ?: folder.listFiles().find { it.name == CONFIG_FILE_NAME }
-                ?: folder.createFile("application/json", CONFIG_FILE_NAME)
+            val configFile = findOrCreateConfigFile(folder)
             
             configFile?.let { file ->
                 val json = JSONObject().apply {
@@ -733,6 +730,24 @@ class SettingsActivity : AppCompatActivity() {
             if (!used.contains(num)) result.add(num)
         }
         return result
+    }
+
+    private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? {
+        // 1. Точное совпадение имени
+        folder.findFile(CONFIG_FILE_NAME)?.let { return it }
+
+        // 2. Файлы, которые создал SAF: texfit.cfg.json, texfit.cfg (1).json и т.п.
+        return folder.listFiles().firstOrNull { file ->
+            val name = file.name ?: return@firstOrNull false
+            name == CONFIG_FILE_NAME || name.startsWith("$CONFIG_FILE_NAME.")
+        }
+    }
+
+    private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? {
+        // Пытаемся переиспользовать уже существующий файл (включая варианты с .json)
+        findConfigFileForRead(folder)?.let { return it }
+        // Иначе создаём новый
+        return folder.createFile("application/json", CONFIG_FILE_NAME)
     }
 }
 

@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
         
         val folderUri = Uri.parse(folderUriStr)
         val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
-        val configFile = folder.findFile(CONFIG_FILE_NAME) ?: return
+        val configFile = findConfigFile(folder) ?: return
 
         try {
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
@@ -85,6 +85,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun findConfigFile(folder: DocumentFile): DocumentFile? {
+        // 1. Точное имя
+        folder.findFile(CONFIG_FILE_NAME)?.let { return it }
+
+        // 2. Варианты, которые создаёт SAF: texfit.cfg.json, texfit.cfg (1).json и т.п.
+        return folder.listFiles().firstOrNull { file ->
+            val name = file.name ?: return@firstOrNull false
+            name == CONFIG_FILE_NAME || name.startsWith("$CONFIG_FILE_NAME.")
+        }
+    }
 }
 
 private class PlaylistAdapter :
