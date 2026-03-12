@@ -141,56 +141,65 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun applySortingAndSelectionLogic(): List<VideoItem> {
-        val sourceTable = adapter.currentList.filter { it.isComplete() }
-        val resultTable = mutableListOf<VideoItem>()
-        
-        // 1. УРОВЕНЬ: Упражнения (бег, прыжки...)
-        val exerciseNames = sourceTable.map { it.exerciseName }.distinct()
-        
-        for (name in exerciseNames) {
-            var hasChanged = false
-            val exerciseRows = sourceTable.filter { it.exerciseName == name }
-            val limit = exerciseRows.maxOf { it.numFile.toIntOrNull() ?: 0 }
-            val resetVal = resetState[name]?.toIntOrNull() ?: 0
-            var currentState = categoryState[name]?.toIntOrNull() ?: 0
+        val allItems = adapter.currentList
+        // 1) взять таблицу
+        // 2) выстроить еЁ виртуально строго по порядку по номерам сеанс - упражнение - файлы
+        val sourceTable = allItems.filter { it.isComplete() }
+            .sortedWith(compareBy(
+                { it.sessionNum.toIntOrNull() ?: 0 },
+                { it.numExercise.toIntOrNull() ?: 0 },
+                { it.numFile.toIntOrNull() ?: 0 }
+            ))
 
-            // 2. УРОВЕНЬ: Подгруппы этого упражнения (№:Название)
-            // Сортируем подгруппы по Сеансу и Номеру упражнения
-            val subGroups = exerciseRows
-                .sortedWith(compareBy({ it.sessionName }, { it.numExercise }))
-                .groupBy { "${it.sessionName}:${it.numExercise}" }
+        val resultTable = mutableListOf<VideoItem>()
+        val changedExercises = mutableSetOf<String>()
+
+        // Группируем по "Слотам" (Сеанс + № Упр)
+        val slotGroups = sourceTable.groupBy { "${it.sessionNum}:${it.numExercise}" }
+
+        // 3) СТАНДАРТНЫЙ цикл по позициям
+        for (group in slotGroups.values) {
+            val firstRow = group.first()
+            val exName = firstRow.exerciseName
             
-            for (entry in subGroups) {
-                val filesInGroup = entry.value.sortedBy { it.numFile }
-                
-                // 3. УРОВЕНЬ: Тот самый "тупой цикл" по файлам внутри подгруппы
-                for (row in filesInGroup) {
+            // Состояние берем текущее (запомненное)
+            val currentState = categoryState[exName]?.toIntOrNull() ?: 0
+            var nextStep = currentState + 1
+            
+            // Лимит и сброс
+            val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
+            if (exerciseFiles.isEmpty()) continue
+            val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+            val resetVal = resetState[exName]?.toIntOrNull() ?: 0
+            if (nextStep > limit) nextStep = resetVal
+            
+            // 4) Сравнить "один к одному" внутри группы
+            for (row in group) {
+                if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
+                    // СОВПАЛО!
+                    resultTable.add(row)
+                    // 4.1) запоминаем новое значение
+                    categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
+                    changedExercises.add(exName)
+                    // СРАЗУ ВЫХОДИМ ИЗ ГРУППЫ НА СЛЕДУЮЩУЮ ПОЗИЦИЮ (break)
+                    break 
+                }
+            }
+        }
+
+        // 6.3) Те, кто НЕ изменились — инкремент на 1
+        for (exName in categoryState.keys) {
+            if (exName !in changedExercises) {
+                val currentState = categoryState[exName]?.toIntOrNull() ?: 0
+                val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
+                if (exerciseFiles.isNotEmpty()) {
+                    val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+                    val resetVal = resetState[exName]?.toIntOrNull() ?: 0
                     var nextStep = currentState + 1
-                    if (nextStep > limit) {
-                        nextStep = resetVal
-                    }
-                    
-                    if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
-                        // СОВПАЛО!
-                        currentState = nextStep
-                        resultTable.add(row)
-                        hasChanged = true
-                        break // <--- ВЫХОД! Переходим к следующей подгруппе (entry)
-                    }
+                    if (nextStep > limit) nextStep = resetVal
+                    categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
                 }
             }
-            
-            // Финальный инкремент, если во всем упражнении не было ни одного совпадения
-            if (!hasChanged) {
-                var finalStep = currentState + 1
-                if (finalStep > limit) {
-                    finalStep = resetVal
-                }
-                currentState = finalStep
-            }
-            
-            // Сохраняем обновленное состояние обратно в общую мапу
-            categoryState[name] = String.format(Locale.US, "%03d", currentState)
         }
 
         return resultTable
@@ -243,9 +252,7 @@ class SettingsActivity : AppCompatActivity() {
         popup.menu.add(0, 1, 0, getString(R.string.menu_folder)).setIcon(R.drawable.ic_add_folder)
         popup.menu.add(0, 2, 1, getString(R.string.menu_file)).setIcon(R.drawable.ic_add_video)
         popup.menu.add(0, 3, 2, getString(R.string.menu_refresh)).setIcon(R.drawable.ic_refresh_custom)
-
         popup.applyPopupForceShowIcon()
-
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> selectFolderLauncher.launch(null)
@@ -311,12 +318,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadUIFromConfig() {
         val folderUri = getFolderUri() ?: return
         val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
-        
-        val configFile = findConfigFileForRead(folder)
-        if (configFile == null) {
-            Log.d(TAG, "loadUIFromConfig: Config not found")
-            return
-        }
+        val configFile = findConfigFileForRead(folder) ?: return
         
         try {
             val json = readConfigJson(configFile) ?: return
@@ -337,15 +339,13 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             categoryState = mutableMapOf()
-            val stateObj = json.optJSONObject("category_state")
-            stateObj?.keys()?.forEach { key ->
-                categoryState[key] = stateObj.getString(key)
+            json.optJSONObject("category_state")?.let { obj ->
+                obj.keys().forEach { key -> categoryState[key] = obj.getString(key) }
             }
             
             resetState = mutableMapOf()
-            val resetObj = json.optJSONObject("reset_state")
-            resetObj?.keys()?.forEach { key ->
-                resetState[key] = resetObj.getString(key)
+            json.optJSONObject("reset_state")?.let { obj ->
+                obj.keys().forEach { key -> resetState[key] = obj.getString(key) }
             }
 
             exerciseOptions.forEach { ex ->
@@ -360,9 +360,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             adapter.submitList(items)
             updateTopInputUI()
-        } catch (e: Exception) { 
-            Log.e(TAG, "Ошибка загрузки конфигурации", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Ошибка загрузки", e) }
     }
 
     private fun performFullRefresh() {
@@ -412,7 +410,8 @@ class SettingsActivity : AppCompatActivity() {
                 if (selectedItems != null) {
                     val titlesArray = JSONArray()
                     selectedItems.forEach { 
-                        titlesArray.put("| ${it.sessionName} | ${it.numExercise} ${it.exerciseName} | ${it.numFile} ${it.fileName} |")
+                        val sFull = if (it.sessionNum.isNotEmpty()) "${it.sessionNum} ${it.sessionName}" else ""
+                        titlesArray.put("| $sFull | ${it.numExercise} ${it.exerciseName} | ${it.numFile} ${it.fileName} |")
                     }
                     put("titles", titlesArray)
                 } else if (existingJson.has("titles")) {
@@ -422,7 +421,7 @@ class SettingsActivity : AppCompatActivity() {
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
                 OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
             }
-        } catch (e: Exception) { Log.e(TAG, "Ошибка сохранения конфигурации", e) }
+        } catch (e: Exception) { Log.e(TAG, "Ошибка сохранения", e) }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -432,39 +431,44 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.action_exit -> { 
-                finishAffinity()
-                exitProcess(0)
-            }
-            android.R.id.home -> { 
-                onBackPressedDispatcher.onBackPressed()
-                true 
-            }
+            R.id.action_exit -> { finishAffinity(); exitProcess(0) }
+            android.R.id.home -> { onBackPressedDispatcher.onBackPressed(); true }
             else -> super.onOptionsItemSelected(item)
         }
     }
 
     data class VideoItem(
+        var sessionNum: String = "",
         var sessionName: String = "",
         var numExercise: String = "", var exerciseName: String = "",
         var numFile: String = "", var fileName: String = "",
         var fileSizeRaw: Long = 0, var note: String = ""
     ) {
-        fun isComplete() = sessionName.isNotBlank() && exerciseName.isNotBlank() && numExercise.isNotBlank() && numFile.isNotBlank()
+        fun isComplete() = sessionNum.isNotEmpty() && exerciseName.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
+        
         fun toJson(sOpt: List<String>, eOpt: List<String>) = JSONObject().apply {
-            put("s_idx", sOpt.indexOf(sessionName)); put("e_idx", eOpt.indexOf(exerciseName))
-            put("n_e", numExercise); put("n_f", numFile); put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note)
+            val fullS = if (sessionNum.isNotEmpty()) "$sessionNum $sessionName" else ""
+            put("s_idx", sOpt.indexOf(fullS))
+            put("e_idx", eOpt.indexOf(exerciseName))
+            put("n_e", numExercise); put("n_f", numFile)
+            put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note)
         }
+        
         companion object {
             fun fromJson(j: JSONObject, sOpt: List<String>, eOpt: List<String>): VideoItem {
-                val sIdx = j.optInt("s_idx", -1); val eIdx = j.optInt("e_idx", -1)
+                val sIdx = j.optInt("s_idx", -1)
+                val eIdx = j.optInt("e_idx", -1)
+                val fullSession = if (sIdx in sOpt.indices) sOpt[sIdx] else ""
+                val exName = if (eIdx in eOpt.indices) eOpt[eIdx] else ""
+                
                 return VideoItem(
-                    if (sIdx in sOpt.indices) sOpt[sIdx] else "", 
-                    j.optString("n_e"), 
-                    if (eIdx in eOpt.indices) eOpt[eIdx] else "", 
-                    j.optString("n_f"), 
-                    j.optString("f_n"), 
-                    j.optLong("f_sz"), 
+                    fullSession.substringBefore(" ", ""),
+                    fullSession.substringAfter(" ", ""),
+                    j.optString("n_e"),
+                    exName,
+                    j.optString("n_f"),
+                    j.optString("f_n"),
+                    j.optLong("f_sz"),
                     j.optString("note")
                 )
             }
@@ -488,13 +492,14 @@ class SettingsActivity : AppCompatActivity() {
 
             fun bind(item: VideoItem, pos: Int) {
                 indicator.setBackgroundColor(if (item.isComplete()) 0xFF4CAF50.toInt() else 0xFFF44336.toInt())
-                sN.text = item.sessionName; nE.text = item.numExercise; eN.text = item.exerciseName
+                sN.text = if (item.sessionNum.isNotEmpty()) "${item.sessionNum} ${item.sessionName}" else ""
+                nE.text = item.numExercise; eN.text = item.exerciseName
                 nF.text = item.numFile; fN.text = item.fileName; note.text = item.note
                 fS.text = formatFileSize(item.fileSizeRaw)
 
                 sN.setOnClickListener { showOptionsDialog("Сеанс", sessionOptions, pos) { showAddSessionDialog(pos) } }
                 nE.setOnClickListener { 
-                    if (getItem(pos).sessionName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() 
+                    if (getItem(pos).sessionNum.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() 
                     else showExerciseNumPopup(pos) 
                 }
                 eN.setOnClickListener { showOptionsDialog("Упражнение", exerciseOptions, pos) { showAddExerciseDialog(pos) } }
@@ -509,17 +514,18 @@ class SettingsActivity : AppCompatActivity() {
                 val dialogView = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16) }
                 val listView = ListView(this@SettingsActivity)
                 val displayOptions = mutableListOf(getString(R.string.empty_option)); displayOptions.addAll(options)
-                val listAdapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, displayOptions)
-                listView.adapter = listAdapter
+                listView.adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, displayOptions)
                 listView.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
                 listView.setOnItemClickListener { _, _, i, _ ->
                     val value = if (i == 0) "" else displayOptions[i]
                     val item = getItem(pos)
-                    if (title == "Сеанс") updateItem(pos, item.copy(sessionName = value, numExercise = ""))
-                    else { 
+                    if (title == "Сеанс") {
+                        val sNumStr = value.substringBefore(" ", "")
+                        val sName = value.substringAfter(" ", "")
+                        updateItem(pos, item.copy(sessionNum = sNumStr, sessionName = sName, numExercise = ""))
+                    } else { 
                         updateItem(pos, item.copy(exerciseName = value, numFile = ""))
-                        if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000" } 
-                        if (value.isNotEmpty() && !resetState.containsKey(value)) { resetState[value] = "000" }
+                        if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000"; resetState[value] = "000" } 
                     }
                     updateTopInputUI(); alertDialog?.dismiss()
                 }
@@ -529,94 +535,55 @@ class SettingsActivity : AppCompatActivity() {
                     val builder = AlertDialog.Builder(this@SettingsActivity)
                         .setTitle(if (title == "Упражнение") getString(R.string.exercise_title_format, value) else getString(R.string.delete_option_title))
                     if (title == "Упражнение") {
-                        val layout = LinearLayout(this@SettingsActivity).apply { 
-                            orientation = LinearLayout.HORIZONTAL
-                            setPadding(40, 20, 40, 0)
-                            weightSum = 2f
-                        }
-
-                        // Левая часть
-                        val leftBox = LinearLayout(this@SettingsActivity).apply {
-                            orientation = LinearLayout.VERTICAL
-                            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                        }
-                        leftBox.addView(TextView(this@SettingsActivity).apply { 
-                            text = "Установить позицию\n\"$value\" в:"; textSize = 12f 
-                        })
-                        val leftValue = TextView(this@SettingsActivity).apply {
-                            text = categoryState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER
-                            setBackgroundResource(android.R.drawable.editbox_background_normal)
-                        }
+                        val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }
+                        val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+                        leftBox.addView(TextView(this@SettingsActivity).apply { text = "Позиция:"; textSize = 12f })
+                        val leftValue = TextView(this@SettingsActivity).apply { text = categoryState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         leftValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v)
                             for (j in 0..999) pop.menu.add(String.format(Locale.US, "%03d", j))
-                            pop.setOnMenuItemClickListener { itMenuItem -> leftValue.text = itMenuItem.title; true }
-                            pop.show()
+                            pop.setOnMenuItemClickListener { leftValue.text = it.title; true }; pop.show()
                         }
                         leftBox.addView(leftValue)
-
-                        // Правая часть
-                        val rightBox = LinearLayout(this@SettingsActivity).apply {
-                            orientation = LinearLayout.VERTICAL
-                            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                            setPadding(20, 0, 0, 0)
-                        }
-                        rightBox.addView(TextView(this@SettingsActivity).apply { 
-                            text = "В конце сбрасывать\n\"$value\" на:"; textSize = 12f 
-                        })
-                        val rightValue = TextView(this@SettingsActivity).apply {
-                            text = resetState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER
-                            setBackgroundResource(android.R.drawable.editbox_background_normal)
-                        }
+                        val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }
+                        rightBox.addView(TextView(this@SettingsActivity).apply { text = "Сброс на:"; textSize = 12f })
+                        val rightValue = TextView(this@SettingsActivity).apply { text = resetState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         rightValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v)
                             pop.menu.add("000"); pop.menu.add("001")
-                            pop.setOnMenuItemClickListener { itMenuItem -> rightValue.text = itMenuItem.title; true }
-                            pop.show()
+                            pop.setOnMenuItemClickListener { rightValue.text = it.title; true }; pop.show()
                         }
-                        rightBox.addView(rightValue)
-
-                        layout.addView(leftBox); layout.addView(rightBox)
+                        rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox)
                         builder.setView(layout)
-
                         builder.setNeutralButton("Удалить") { _, _ ->
                             options.remove(value); categoryState.remove(value); resetState.remove(value)
-                            val newList = currentList.map { if (it.exerciseName == value) it.copy(exerciseName = "", numFile = "") else it }
-                            saveAndRefresh(newList)
+                            saveAndRefresh(currentList.map { if (it.exerciseName == value) it.copy(exerciseName = "", numFile = "") else it })
                         }
                         builder.setPositiveButton("Сохранить") { _, _ ->
-                            categoryState[value] = leftValue.text.toString()
-                            resetState[value] = rightValue.text.toString()
+                            categoryState[value] = leftValue.text.toString(); resetState[value] = rightValue.text.toString()
                             saveAndRefresh(currentList)
                         }
                     } else {
                         builder.setMessage(value).setPositiveButton("Удалить") { _, _ ->
                             options.remove(value)
-                            val newList = currentList.map { if (it.sessionName == value) it.copy(sessionName = "", numExercise = "") else it }
-                            saveAndRefresh(newList)
+                            val sNum = value.substringBefore(" ", "")
+                            val sName = value.substringAfter(" ", "")
+                            saveAndRefresh(currentList.map { if (it.sessionNum == sNum && it.sessionName == sName) it.copy(sessionNum = "", sessionName = "", numExercise = "") else it })
                         }
                     }
-                    builder.setNegativeButton("Отмена", null)
-                    val dlg = builder.create()
-                    dlg.setOnShowListener { tintDialogButtons(dlg, neutralIsDestructive = title == "Упражнение") }
-                    dlg.show(); true
+                    builder.setNegativeButton("Отмена", null); val dlg = builder.create()
+                    dlg.setOnShowListener { tintDialogButtons(dlg, title == "Упражнение") }; dlg.show(); true
                 }
                 dialogView.addView(listView)
                 val btnAdd = ImageButton(this@SettingsActivity).apply { 
-                    setImageResource(android.R.drawable.ic_input_add)
-                    scaleType = ImageView.ScaleType.CENTER_INSIDE
-                    background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg)
-                    setPadding(8, 8, 8, 8)
+                    setImageResource(android.R.drawable.ic_input_add); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg)
                     layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER; topMargin = 16 }
                     setOnClickListener { onAdd(); alertDialog?.dismiss() } 
                 }
                 dialogView.addView(btnAdd)
-                alertDialog = AlertDialog.Builder(this@SettingsActivity).setTitle(title).setView(dialogView).create()
-                alertDialog?.show()
+                alertDialog = AlertDialog.Builder(this@SettingsActivity).setTitle(title).setView(dialogView).create(); alertDialog?.show()
                 val lp = WindowManager.LayoutParams(); lp.copyFrom(alertDialog?.window?.attributes)
-                val charWidth = 30
-                val widthPx = (charWidth * resources.displayMetrics.scaledDensity * 10).toInt()
-                lp.width = Math.min(widthPx, (resources.displayMetrics.widthPixels * 0.9).toInt())
+                lp.width = Math.min((30 * resources.displayMetrics.scaledDensity * 10).toInt(), (resources.displayMetrics.widthPixels * 0.9).toInt())
                 alertDialog?.window?.attributes = lp
             }
             private var alertDialog: AlertDialog? = null
@@ -627,162 +594,87 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             private fun showExerciseNumPopup(pos: Int) {
-                val popup = PopupMenu(this@SettingsActivity, nE)
-                popup.menu.add(getString(R.string.empty_option))
+                val popup = PopupMenu(this@SettingsActivity, nE); popup.menu.add(getString(R.string.empty_option))
                 val currentItem = getItem(pos)
-                val currentSess = currentItem.sessionName
-                val currentExName = currentItem.exerciseName
-                
-                // Исключаем из списка только те номера, которые заняты ДРУГИМИ упражнениями в этом сеансе
-                val usedNumsByOtherExercises = currentList
-                    .filter { it.sessionName == currentSess && it.sessionName.isNotEmpty() && it.exerciseName != currentExName }
-                    .map { it.numExercise }
-                    .toSet()
-                
-                val freeNums = generateFreeNumbers(usedNumsByOtherExercises, 1, 99, "%02d")
-                freeNums.forEach { popup.menu.add(it) }
-                popup.setOnMenuItemClickListener {
-                    updateItem(pos, getItem(pos).copy(numExercise = if (it.title == getString(R.string.empty_option)) "" else it.title.toString()))
-                    updateTopInputUI()
-                    true 
-                }
-                popup.applyPopupMinWidth(80)
-                popup.show()
+                val used = currentList.filter { it.sessionNum == currentItem.sessionNum && it.sessionName == currentItem.sessionName && it.sessionNum.isNotEmpty() && it.exerciseName != currentItem.exerciseName }.map { it.numExercise }.toSet()
+                generateFreeNumbers(used, 1, 99, "%02d").forEach { popup.menu.add(it) }
+                popup.setOnMenuItemClickListener { updateItem(pos, getItem(pos).copy(numExercise = if (it.title == getString(R.string.empty_option)) "" else it.title.toString())); updateTopInputUI(); true }
+                popup.applyPopupMinWidth(80); popup.show()
             }
 
             private fun showFileNumPopup(pos: Int) {
-                val popup = PopupMenu(this@SettingsActivity, nF)
-                popup.menu.add(getString(R.string.empty_option))
-                val usedNums = currentList.filter { it.exerciseName == getItem(pos).exerciseName && it.exerciseName.isNotEmpty() }.map { it.numFile }.toSet()
-                val freeNums = generateFreeNumbers(usedNums, 1, 999, "%03d")
-                freeNums.forEach { popup.menu.add(it) }
-                popup.setOnMenuItemClickListener {
-                    updateItem(pos, getItem(pos).copy(numFile = if (it.title == getString(R.string.empty_option)) "" else it.title.toString()))
-                    updateTopInputUI()
-                    true 
-                }
-                popup.applyPopupMinWidth(120)
-                popup.show()
+                val popup = PopupMenu(this@SettingsActivity, nF); popup.menu.add(getString(R.string.empty_option))
+                val used = currentList.filter { it.exerciseName == getItem(pos).exerciseName && it.exerciseName.isNotEmpty() }.map { it.numFile }.toSet()
+                generateFreeNumbers(used, 1, 999, "%03d").forEach { popup.menu.add(it) }
+                popup.setOnMenuItemClickListener { updateItem(pos, getItem(pos).copy(numFile = if (it.title == getString(R.string.empty_option)) "" else it.title.toString())); updateTopInputUI(); true }
+                popup.applyPopupMinWidth(120); popup.show()
             }
 
             private fun showNoteEditDialog(pos: Int) {
                 val input = EditText(this@SettingsActivity).apply { setText(getItem(pos).note) }
-                val dialog = AlertDialog.Builder(this@SettingsActivity)
-                    .setTitle(getString(R.string.note_title))
-                    .setView(input)
-                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
-                        updateItem(pos, getItem(pos).copy(note = input.text.toString()))
-                    }
-                    .setNegativeButton(getString(R.string.dialog_cancel), null)
-                    .create()
-                dialog.setOnShowListener { tintDialogButtons(dialog) }
-                dialog.show()
+                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.note_title)).setView(input)
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItem(pos, getItem(pos).copy(note = input.text.toString())) }
+                    .setNegativeButton(getString(R.string.dialog_cancel), null).create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
 
             private fun showAddSessionDialog(pos: Int) {
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }
                 var selectedNum = ""
                 val numBtn = ImageButton(this@SettingsActivity).apply { 
-                    setImageResource(android.R.drawable.ic_menu_sort_by_size)
-                    setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN)
-                    scaleType = ImageView.ScaleType.CENTER_INSIDE
-                    background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg)
-                    layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER } 
+                    setImageResource(android.R.drawable.ic_menu_sort_by_size); setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN)
+                    background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER } 
                 }
                 val numDisplay = TextView(this@SettingsActivity).apply { text = "№ не выбран"; gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }
                 numBtn.setOnClickListener { btn ->
-                    val pop = PopupMenu(this@SettingsActivity, btn)
-                    val usedNums = sessionOptions.map { it.split(" ")[0] }.toSet()
-                    for (i in 1..9) { val n = i.toString(); if (!usedNums.contains(n)) pop.menu.add(n) }
+                    val pop = PopupMenu(this@SettingsActivity, btn); val used = sessionOptions.map { it.split(" ")[0] }.toSet()
+                    for (i in 1..9) { val n = i.toString(); if (!used.contains(n)) pop.menu.add(n) }
                     pop.setOnMenuItemClickListener { selectedNum = it.title.toString(); numDisplay.text = "Выбран № $selectedNum"; true }; pop.show()
                 }
-                val nameInput = EditText(this@SettingsActivity).apply { hint = "Название" }
-                val nameHint = getString(R.string.name_hint)
-                nameInput.hint = nameHint
+                val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }
                 layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput)
-                val dialog = AlertDialog.Builder(this@SettingsActivity)
+                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_session)).setView(layout)
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
                         val name = nameInput.text.toString().trim()
-                        if (selectedNum.isEmpty()) {
-                            Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show()
-                            return@setPositiveButton
-                        }
-                        val usedNames = sessionOptions.map { it.substringAfter(" ") }.toSet()
-                        if (usedNames.contains(name)) {
-                            Toast.makeText(this@SettingsActivity, getString(R.string.name_must_be_unique), Toast.LENGTH_SHORT).show()
-                            return@setPositiveButton
-                        }
+                        if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show(); return@setPositiveButton }
                         val combined = "$selectedNum $name"
-                        if (!sessionOptions.contains(combined)) {
-                            sessionOptions.add(combined)
-                            sessionOptions.sort()
-                        }
-                        updateItem(pos, getItem(pos).copy(sessionName = combined))
-                    }
-                    .setNegativeButton(getString(R.string.dialog_cancel), null)
-                    .setView(layout)
-                    .setTitle(getString(R.string.new_session))
-                    .create()
-                dialog.setOnShowListener { tintDialogButtons(dialog) }
-                dialog.show()
+                        if (!sessionOptions.contains(combined)) { sessionOptions.add(combined); sessionOptions.sort() }
+                        updateItem(pos, getItem(pos).copy(sessionNum = selectedNum, sessionName = name))
+                    }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
 
             private fun showAddExerciseDialog(pos: Int) {
                 val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }
-                val dialog = AlertDialog.Builder(this@SettingsActivity)
+                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_exercise)).setView(input)
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
                         val name = input.text.toString().trim()
                         if (name.isNotEmpty()) {
-                            if (!exerciseOptions.contains(name)) {
-                                exerciseOptions.add(name)
-                                exerciseOptions.sort()
-                                categoryState[name] = "000" 
-                                resetState[name] = "000"
-                            }
+                            if (!exerciseOptions.contains(name)) { exerciseOptions.add(name); exerciseOptions.sort(); categoryState[name] = "000"; resetState[name] = "000" }
                             updateItem(pos, getItem(pos).copy(exerciseName = name))
                         }
-                    }
-                    .setNegativeButton(getString(R.string.dialog_cancel), null)
-                    .setView(input)
-                    .setTitle(getString(R.string.new_exercise))
-                    .create()
-                dialog.setOnShowListener { tintDialogButtons(dialog) }
-                dialog.show()
+                    }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
 
             private fun updateItem(pos: Int, newItem: VideoItem) {
-                val newList = currentList.toMutableList()
-                newList[pos] = newItem
+                val newList = currentList.toMutableList(); newList[pos] = newItem
                 val folder = getFolderDocumentFile() ?: return
                 saveToConfig(folder, newList); loadUIFromConfig()
             }
         }
     }
     
-    private fun getFolderDocumentFile(): DocumentFile? {
-        val folderUri = getFolderUri() ?: return null
-        return DocumentFile.fromTreeUri(this, folderUri)
-    }
+    private fun getFolderDocumentFile(): DocumentFile? = getFolderUri()?.let { DocumentFile.fromTreeUri(this, it) }
 
-    private fun readConfigJson(configFile: DocumentFile): JSONObject? {
-        return try {
-            contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
-                JSONObject(inputStream.bufferedReader().readText())
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка чтения конфигурации", e)
-            null
-        }
-    }
+    private fun readConfigJson(configFile: DocumentFile): JSONObject? = try {
+        contentResolver.openInputStream(configFile.uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) }
+    } catch (e: Exception) { Log.e(TAG, "Ошибка чтения", e); null }
 
     private fun tintDialogButtons(dialog: AlertDialog, neutralIsDestructive: Boolean = false) {
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            ?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-            ?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-        if (neutralIsDestructive) {
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
-        }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        if (neutralIsDestructive) dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
     }
 
     private fun generateFreeNumbers(used: Set<String>, from: Int, to: Int, format: String): List<String> {
@@ -796,39 +688,25 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? {
         folder.findFile(CONFIG_FILE_NAME)?.let { return it }
-        return folder.listFiles().firstOrNull { file ->
-            val name = file.name ?: return@firstOrNull false
-            name == CONFIG_FILE_NAME || name.startsWith("$CONFIG_FILE_NAME.")
-        }
+        return folder.listFiles().firstOrNull { (it.name ?: "").startsWith(CONFIG_FILE_NAME) }
     }
 
-    private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? {
-        findConfigFileForRead(folder)?.let { return it }
-        return folder.createFile("application/json", CONFIG_FILE_NAME)
-    }
+    private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? = findConfigFileForRead(folder) ?: folder.createFile("application/json", CONFIG_FILE_NAME)
 }
 
 private fun PopupMenu.applyPopupMinWidth(widthPx: Int) {
     try {
-        val popupClazz = this.javaClass
-        val mPopupField = popupClazz.getDeclaredField("mPopup")
-        mPopupField.isAccessible = true
+        val mPopupField = this.javaClass.getDeclaredField("mPopup").apply { isAccessible = true }
         val menuPopupHelper = mPopupField.get(this) ?: return
-        val helperClazz = menuPopupHelper.javaClass
-        val setMinWidthMethod = helperClazz.getDeclaredMethod("setMinWidth", Int::class.java)
-        setMinWidthMethod.invoke(menuPopupHelper, widthPx)
+        menuPopupHelper.javaClass.getDeclaredMethod("setMinWidth", Int::class.java).invoke(menuPopupHelper, widthPx)
     } catch (e: Exception) { Log.e("SettingsActivity", "Popup width error", e) }
 }
 
 private fun PopupMenu.applyPopupForceShowIcon() {
     try {
-        val popupClazz = this.javaClass
-        val mPopupField = popupClazz.getDeclaredField("mPopup")
-        mPopupField.isAccessible = true
+        val mPopupField = this.javaClass.getDeclaredField("mPopup").apply { isAccessible = true }
         val menuPopupHelper = mPopupField.get(this) ?: return
-        val helperClazz = menuPopupHelper.javaClass
-        val setForceShowIconMethod = helperClazz.getDeclaredMethod("setForceShowIcon", Boolean::class.java)
-        setForceShowIconMethod.invoke(menuPopupHelper, true)
+        menuPopupHelper.javaClass.getDeclaredMethod("setForceShowIcon", Boolean::class.java).invoke(menuPopupHelper, true)
     } catch (e: Exception) { Log.e("SettingsActivity", "Popup icon error", e) }
 }
 
