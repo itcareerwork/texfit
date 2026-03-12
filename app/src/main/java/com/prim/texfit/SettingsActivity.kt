@@ -143,47 +143,54 @@ class SettingsActivity : AppCompatActivity() {
     private fun applySortingAndSelectionLogic(): List<VideoItem> {
         val sourceTable = adapter.currentList.filter { it.isComplete() }
         val resultTable = mutableListOf<VideoItem>()
-        val changedInThisIteration = mutableSetOf<String>()
         
-        val categoryStatesInt = categoryState.mapValues { it.value.toIntOrNull() ?: 0 }.toMutableMap()
+        // 1. УРОВЕНЬ: Упражнения (бег, прыжки...)
+        val exerciseNames = sourceTable.map { it.exerciseName }.distinct()
+        
+        for (name in exerciseNames) {
+            var hasChanged = false
+            val exerciseRows = sourceTable.filter { it.exerciseName == name }
+            val limit = exerciseRows.maxOf { it.numFile.toIntOrNull() ?: 0 }
+            val resetVal = resetState[name]?.toIntOrNull() ?: 0
+            var currentState = categoryState[name]?.toIntOrNull() ?: 0
 
-        val maxLimits = sourceTable.groupBy { it.exerciseName }
-            .mapValues { (_, rows) -> rows.maxOf { it.numFile.toIntOrNull() ?: 0 } }
-
-        val virtualTable = sourceTable.sortedWith(
-            compareBy({ it.sessionName }, { it.numExercise }, { it.numFile })
-        )
-
-        for (row in virtualTable) {
-            val name = row.exerciseName
-            val limit = maxLimits[name] ?: 0
-            val currentState = categoryStatesInt.getOrPut(name) { 0 }
-
-            var nextStep = currentState + 1
-            if (nextStep > limit) {
-                nextStep = resetState[name]?.toIntOrNull() ?: 0 
+            // 2. УРОВЕНЬ: Подгруппы этого упражнения (№:Название)
+            // Сортируем подгруппы по Сеансу и Номеру упражнения
+            val subGroups = exerciseRows
+                .sortedWith(compareBy({ it.sessionName }, { it.numExercise }))
+                .groupBy { "${it.sessionName}:${it.numExercise}" }
+            
+            for (entry in subGroups) {
+                val filesInGroup = entry.value.sortedBy { it.numFile }
+                
+                // 3. УРОВЕНЬ: Тот самый "тупой цикл" по файлам внутри подгруппы
+                for (row in filesInGroup) {
+                    var nextStep = currentState + 1
+                    if (nextStep > limit) {
+                        nextStep = resetVal
+                    }
+                    
+                    if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
+                        // СОВПАЛО!
+                        currentState = nextStep
+                        resultTable.add(row)
+                        hasChanged = true
+                        break // <--- ВЫХОД! Переходим к следующей подгруппе (entry)
+                    }
+                }
             }
-            if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
-                categoryStatesInt[name] = nextStep
-                changedInThisIteration.add(name)
-                resultTable.add(row)
-            }
-        }
-
-        for (name in maxLimits.keys) {
-            if (!changedInThisIteration.contains(name)) {
-                val limit = maxLimits[name] ?: 0
-                val currentState = categoryStatesInt.getOrPut(name) { 0 }
+            
+            // Финальный инкремент, если во всем упражнении не было ни одного совпадения
+            if (!hasChanged) {
                 var finalStep = currentState + 1
                 if (finalStep > limit) {
-                    finalStep = resetState[name]?.toIntOrNull() ?: 0
+                    finalStep = resetVal
                 }
-                categoryStatesInt[name] = finalStep
+                currentState = finalStep
             }
-        }
-
-        categoryStatesInt.forEach { (k, v) ->
-            categoryState[k] = String.format(Locale.US, "%03d", v)
+            
+            // Сохраняем обновленное состояние обратно в общую мапу
+            categoryState[name] = String.format(Locale.US, "%03d", currentState)
         }
 
         return resultTable
@@ -622,9 +629,17 @@ class SettingsActivity : AppCompatActivity() {
             private fun showExerciseNumPopup(pos: Int) {
                 val popup = PopupMenu(this@SettingsActivity, nE)
                 popup.menu.add(getString(R.string.empty_option))
-                val currentSess = getItem(pos).sessionName
-                val usedNums = currentList.filter { it.sessionName == currentSess && it.sessionName.isNotEmpty() }.map { it.numExercise }.toSet()
-                val freeNums = generateFreeNumbers(usedNums, 1, 99, "%02d")
+                val currentItem = getItem(pos)
+                val currentSess = currentItem.sessionName
+                val currentExName = currentItem.exerciseName
+                
+                // Исключаем из списка только те номера, которые заняты ДРУГИМИ упражнениями в этом сеансе
+                val usedNumsByOtherExercises = currentList
+                    .filter { it.sessionName == currentSess && it.sessionName.isNotEmpty() && it.exerciseName != currentExName }
+                    .map { it.numExercise }
+                    .toSet()
+                
+                val freeNums = generateFreeNumbers(usedNumsByOtherExercises, 1, 99, "%02d")
                 freeNums.forEach { popup.menu.add(it) }
                 popup.setOnMenuItemClickListener {
                     updateItem(pos, getItem(pos).copy(numExercise = if (it.title == getString(R.string.empty_option)) "" else it.title.toString()))
