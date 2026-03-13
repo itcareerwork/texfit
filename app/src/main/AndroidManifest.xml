@@ -26,6 +26,12 @@
             android:exported="false"
             android:label="@string/settings_title" />
 
+        <activity
+            android:name=".VideoPlayerActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize" />
+
     </application>
 
 </manifest>
