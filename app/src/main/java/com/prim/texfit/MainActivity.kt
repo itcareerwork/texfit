@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
     }
 
-    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val debugInfo: String)
+    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val debugInfo: String, val lastPos: Int)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
@@ -84,7 +84,6 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
-                // Преобразуем video_items в удобную карту по ID
                 val videoItemsMap = mutableMapOf<String, JSONObject>()
                 for (i in 0 until videoItemsArray.length()) {
                     val item = videoItemsArray.getJSONObject(i)
@@ -97,6 +96,7 @@ class MainActivity : AppCompatActivity() {
                     val entry = titlesArray.optJSONArray(i) ?: continue
                     val id = entry.optString(0)
                     val status = entry.optInt(1, 0)
+                    val lastPos = entry.optInt(2, 0) // ПОЗИЦИЯ ПАУЗЫ
                     
                     val itemJson = videoItemsMap[id] ?: continue
                     val fileName = itemJson.optString("f_n")
@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
 
                     if (fileName.isNotEmpty()) {
                         folder.findFile(fileName)?.uri?.let { uri ->
-                            playlist.add(PlaylistItem(id, uri, status == 1, debugStr))
+                            playlist.add(PlaylistItem(id, uri, status == 1, debugStr, lastPos))
                         }
                     }
                 }
@@ -224,7 +224,9 @@ class MainActivity : AppCompatActivity() {
             holder.imageView.setOnClickListener {
                 val intent = Intent(this@MainActivity, VideoPlayerActivity::class.java)
                 intent.putExtra("video_uri", item.uri)
-                intent.putExtra("video_item_id", item.id) // ПЕРЕДАЕМ UUID
+                intent.putExtra("video_item_id", item.id)
+                intent.putExtra("last_pos", item.lastPos) // ПЕРЕДАЕМ ПОЗИЦИЮ ПАУЗЫ
+                intent.putExtra("item_index", position) // ИНДЕКС В ПЛЕЙЛИСТЕ
                 startActivity(intent)
             }
         }

@@ -75,7 +75,7 @@
         android:splitTrack="false"
         android:progressDrawable="@android:drawable/progress_horizontal" />
 
-    <!-- Кнопки Назад / Вперед (разнесены от центра на 1/3) -->
+    <!-- Кнопки Назад / Вперед (разнесены от центра, расстояние 2/4 экрана) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -83,29 +83,27 @@
         android:layout_marginBottom="24dp"
         android:orientation="horizontal"
         android:gravity="center"
-        android:weightSum="3">
-
-        <FrameLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center">
-             <Button
-                android:id="@+id/btn_prev"
-                android:layout_width="60dp"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="&lt;&lt;"
-                android:alpha="0.5" />
-        </FrameLayout>
+        android:weightSum="4">
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <FrameLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center">
-            <Button
-                android:id="@+id/btn_next"
-                android:layout_width="60dp"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="&gt;&gt;"
-                android:alpha="0.5" />
-        </FrameLayout>
+        <Button
+            android:id="@+id/btn_prev"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:text="&lt;&lt;"
+            android:alpha="0.5" />
+
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="2" />
+
+        <Button
+            android:id="@+id/btn_next"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:text="&gt;&gt;"
+            android:alpha="0.5" />
+
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
     </LinearLayout>
 
     <!-- Кнопка "Упражнения" (снизу слева) -->

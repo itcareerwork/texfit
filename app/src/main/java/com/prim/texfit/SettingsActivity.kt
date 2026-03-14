@@ -195,17 +195,23 @@ class SettingsActivity : AppCompatActivity() {
     private fun performLaunchStep() {
         val selectedItems = applySortingAndSelectionLogic()
         
-        // Инкремент с учетом множителя
+        // ОБНОВЛЕННАЯ ЛОГИКА ИНКРЕМЕНТА: 0 -> Шаг -> Шаг*Множитель
         selectedItems.forEach { item ->
-            val fileNum = item.numFile.toIntOrNull() ?: 0
+            val fileNum = item.numFile.toIntOrNull() ?: 1
             item.timings.forEach { t ->
-                val increment = when(t.multType) {
-                    1 -> t.multVal // Множитель от 1 до 10
-                    2 -> fileNum  // Множитель по номеру файла
-                    else -> 1     // Без множителя
-                }
-                if (t.curr < t.max) {
-                    t.curr = (t.curr + increment).coerceAtMost(t.max)
+                if (t.max > 0) {
+                    val multiplier = when(t.multType) {
+                        1 -> t.multVal.toLong()
+                        2 -> fileNum.toLong()
+                        else -> 1L
+                    }
+                    
+                    val newCurr = when {
+                        t.curr == 0L -> t.step
+                        t.curr == t.step && multiplier > 1 -> t.step * multiplier
+                        else -> t.curr + (t.step * multiplier)
+                    }
+                    t.curr = newCurr.coerceAtMost(t.max)
                 }
             }
         }
@@ -414,8 +420,9 @@ class SettingsActivity : AppCompatActivity() {
                     val titlesArray = JSONArray()
                     selectedItems.forEach { selected ->
                         val entry = JSONArray()
-                        entry.put(selected.id) // ИСПОЛЬЗУЕМ UUID
+                        entry.put(selected.id) 
                         entry.put(0) // status
+                        entry.put(0) // last playback position (ms)
                         titlesArray.put(entry)
                     }
                     put("titles", titlesArray)
@@ -444,14 +451,15 @@ class SettingsActivity : AppCompatActivity() {
 
     data class Timing(
         val time: Int, 
-        val max: Int, 
-        var curr: Int,
+        var max: Long = 0L, 
+        var curr: Long = 0L, 
+        var step: Long = 0L, 
         var multType: Int = 0,
         var multVal: Int = 1
     )
 
     data class VideoItem(
-        var id: String = UUID.randomUUID().toString(), // УНИКАЛЬНЫЙ ID
+        var id: String = UUID.randomUUID().toString(),
         var sessionNum: String = "",
         var sessionName: String = "",
         var numExercise: String = "", var exerciseName: String = "",
@@ -462,7 +470,7 @@ class SettingsActivity : AppCompatActivity() {
         fun isComplete() = sessionNum.isNotEmpty() && exerciseName.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
         
         fun toJson(sOpt: List<String>, eOpt: List<String>) = JSONObject().apply {
-            put("id", id) // СОХРАНЯЕМ ID
+            put("id", id)
             val fullS = if (sessionNum.isNotEmpty()) "$sessionNum $sessionName" else ""
             put("s_idx", sOpt.indexOf(fullS))
             put("e_idx", eOpt.indexOf(exerciseName))
@@ -473,7 +481,7 @@ class SettingsActivity : AppCompatActivity() {
             timings.forEach { 
                 val tObj = JSONObject()
                 tObj.put("t", it.time); tObj.put("m", it.max); tObj.put("c", it.curr)
-                tObj.put("mt", it.multType); tObj.put("mv", it.multVal)
+                tObj.put("s", it.step); tObj.put("mt", it.multType); tObj.put("mv", it.multVal)
                 tArr.put(tObj)
             }
             put("timings", tArr)
@@ -487,7 +495,7 @@ class SettingsActivity : AppCompatActivity() {
                 val exName = if (eIdx in eOpt.indices) eOpt[eIdx] else ""
                 
                 val vi = VideoItem(
-                    id = j.optString("id", UUID.randomUUID().toString()), // ЗАГРУЖАЕМ ID
+                    id = j.optString("id", UUID.randomUUID().toString()),
                     sessionNum = fullSession.substringBefore(" ", ""),
                     sessionName = fullSession.substringAfter(" ", ""),
                     numExercise = j.optString("n_e"),
@@ -504,8 +512,9 @@ class SettingsActivity : AppCompatActivity() {
                         val tObj = tArr.getJSONObject(i)
                         vi.timings.add(Timing(
                             tObj.getInt("t"), 
-                            tObj.getInt("m"), 
-                            tObj.getInt("c"),
+                            tObj.optLong("m", 0L), 
+                            tObj.optLong("c", 0L),
+                            tObj.optLong("s", 0L),
                             tObj.optInt("mt", 0),
                             tObj.optInt("mv", 1)
                         ))
