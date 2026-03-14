@@ -193,6 +193,22 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun performLaunchStep() {
         val selectedItems = applySortingAndSelectionLogic()
+        
+        // Инкремент с учетом множителя
+        selectedItems.forEach { item ->
+            val fileNum = item.numFile.toIntOrNull() ?: 0
+            item.timings.forEach { t ->
+                val increment = when(t.multType) {
+                    1 -> t.multVal // Множитель от 1 до 10
+                    2 -> fileNum  // Множитель по номеру файла
+                    else -> 1     // Без множителя
+                }
+                if (t.curr < t.max) {
+                    t.curr = (t.curr + increment).coerceAtMost(t.max)
+                }
+            }
+        }
+
         updateTopInputUI()
 
         if (selectedItems.isEmpty()) {
@@ -400,7 +416,7 @@ class SettingsActivity : AppCompatActivity() {
                         if (idx != -1) {
                             val entry = JSONArray()
                             entry.put(idx)
-                            entry.put(0) // watched status: 0
+                            entry.put(0) // status
                             titlesArray.put(entry)
                         }
                     }
@@ -428,12 +444,21 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    data class Timing(
+        val time: Int, 
+        val max: Int, 
+        var curr: Int,
+        var multType: Int = 0, // 0: нет, 1: 1-10, 2: по номеру файла
+        var multVal: Int = 1
+    )
+
     data class VideoItem(
         var sessionNum: String = "",
         var sessionName: String = "",
         var numExercise: String = "", var exerciseName: String = "",
         var numFile: String = "", var fileName: String = "",
-        var fileSizeRaw: Long = 0, var note: String = ""
+        var fileSizeRaw: Long = 0, var note: String = "",
+        var timings: MutableList<Timing> = mutableListOf()
     ) {
         fun isComplete() = sessionNum.isNotEmpty() && exerciseName.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
         
@@ -443,6 +468,15 @@ class SettingsActivity : AppCompatActivity() {
             put("e_idx", eOpt.indexOf(exerciseName))
             put("n_e", numExercise); put("n_f", numFile)
             put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note)
+            
+            val tArr = JSONArray()
+            timings.forEach { 
+                val tObj = JSONObject()
+                tObj.put("t", it.time); tObj.put("m", it.max); tObj.put("c", it.curr)
+                tObj.put("mt", it.multType); tObj.put("mv", it.multVal)
+                tArr.put(tObj)
+            }
+            put("timings", tArr)
         }
         
         companion object {
@@ -451,7 +485,8 @@ class SettingsActivity : AppCompatActivity() {
                 val eIdx = j.optInt("e_idx", -1)
                 val fullSession = if (sIdx in sOpt.indices) sOpt[sIdx] else ""
                 val exName = if (eIdx in eOpt.indices) eOpt[eIdx] else ""
-                return VideoItem(
+                
+                val vi = VideoItem(
                     fullSession.substringBefore(" ", ""),
                     fullSession.substringAfter(" ", ""),
                     j.optString("n_e"),
@@ -461,6 +496,21 @@ class SettingsActivity : AppCompatActivity() {
                     j.optLong("f_sz"),
                     j.optString("note")
                 )
+                
+                val tArr = j.optJSONArray("timings")
+                if (tArr != null) {
+                    for (i in 0 until tArr.length()) {
+                        val tObj = tArr.getJSONObject(i)
+                        vi.timings.add(Timing(
+                            tObj.getInt("t"), 
+                            tObj.getInt("m"), 
+                            tObj.getInt("c"),
+                            tObj.optInt("mt", 0),
+                            tObj.optInt("mv", 1)
+                        ))
+                    }
+                }
+                return vi
             }
         }
     }

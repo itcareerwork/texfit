@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
@@ -18,6 +19,50 @@
         android:clickable="true"
         android:focusable="true" />
 
+    <!-- Счетчик упражнений с круговым таймером -->
+    <FrameLayout
+        android:id="@+id/layout_counter_container"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="80dp"
+        android:visibility="gone">
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/circular_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            app:indicatorColor="#FFEB3B"
+            app:trackColor="#40FFFFFF"
+            app:indicatorSize="70dp"
+            app:trackThickness="4dp" />
+
+        <TextView
+            android:id="@+id/tv_exercise_counter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:textColor="#FFEB3B"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:shadowColor="#000000"
+            android:shadowDx="2"
+            android:shadowDy="2"
+            android:shadowRadius="4" />
+    </FrameLayout>
+
+    <!-- Контейнер для рисок (над SeekBar) -->
+    <FrameLayout
+        android:id="@+id/layout_ticks"
+        android:layout_width="match_parent"
+        android:layout_height="12dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="2dp"
+        android:elevation="2dp" />
+
     <SeekBar
         android:id="@+id/seek_bar"
         android:layout_width="match_parent"
@@ -30,13 +75,64 @@
         android:splitTrack="false"
         android:progressDrawable="@android:drawable/progress_horizontal" />
 
+    <!-- Кнопки Назад / Вперед (разнесены от центра на 1/3) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="24dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:weightSum="3">
+
+        <FrameLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center">
+             <Button
+                android:id="@+id/btn_prev"
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="&lt;&lt;"
+                android:alpha="0.5" />
+        </FrameLayout>
+
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+
+        <FrameLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center">
+            <Button
+                android:id="@+id/btn_next"
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="&gt;&gt;"
+                android:alpha="0.5" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- Кнопка "Упражнения" (снизу слева) -->
+    <Button
+        android:id="@+id/btn_exercise_menu"
+        android:layout_width="wrap_content"
+        android:layout_height="32dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="12dp"
+        android:layout_marginBottom="20dp"
+        android:text="Упражнения"
+        android:textSize="10sp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:backgroundTint="#80444444"
+        android:textColor="#FFFFFF"
+        style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/layout_pause_info"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:orientation="vertical"
         android:gravity="center"
         android:visibility="gone">
@@ -46,22 +142,21 @@
             android:layout_height="wrap_content"
             android:text="ПАУЗА"
             android:textColor="#FFFFFF"
-            android:textSize="22sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:background="#40000000"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp" />
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
             android:text="ПРОДОЛЖИТЬ"
             android:textColor="#CCCCCC"
             android:textSize="14sp"
             android:background="#40000000"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp" />
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
     </LinearLayout>
 
     <Button
