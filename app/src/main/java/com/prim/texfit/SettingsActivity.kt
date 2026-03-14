@@ -44,6 +44,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.util.Calendar
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.system.exitProcess
@@ -276,7 +277,7 @@ class SettingsActivity : AppCompatActivity() {
                 return
             }
             val currentItems = adapter.currentList.toMutableList()
-            currentItems.add(VideoItem(fileName = name, fileSizeRaw = pickedFile.length()))
+            currentItems.add(VideoItem(id = UUID.randomUUID().toString(), fileName = name, fileSizeRaw = pickedFile.length()))
             saveToConfig(folder, currentItems)
             loadUIFromConfig()
         } catch (e: Exception) { Log.e(TAG, "Add file error", e) }
@@ -373,7 +374,7 @@ class SettingsActivity : AppCompatActivity() {
         val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
         val existingNames = updatedItems.map { it.fileName }.toSet()
         filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
-            updatedItems.add(VideoItem(fileName = file.name ?: "", fileSizeRaw = file.length()))
+            updatedItems.add(VideoItem(id = UUID.randomUUID().toString(), fileName = file.name ?: "", fileSizeRaw = file.length()))
         }
         saveToConfig(folder, updatedItems)
         loadUIFromConfig()
@@ -412,13 +413,10 @@ class SettingsActivity : AppCompatActivity() {
                 if (selectedItems != null) {
                     val titlesArray = JSONArray()
                     selectedItems.forEach { selected ->
-                        val idx = items.indexOfFirst { it.fileName == selected.fileName }
-                        if (idx != -1) {
-                            val entry = JSONArray()
-                            entry.put(idx)
-                            entry.put(0) // status
-                            titlesArray.put(entry)
-                        }
+                        val entry = JSONArray()
+                        entry.put(selected.id) // ИСПОЛЬЗУЕМ UUID
+                        entry.put(0) // status
+                        titlesArray.put(entry)
                     }
                     put("titles", titlesArray)
                 } else {
@@ -448,11 +446,12 @@ class SettingsActivity : AppCompatActivity() {
         val time: Int, 
         val max: Int, 
         var curr: Int,
-        var multType: Int = 0, // 0: нет, 1: 1-10, 2: по номеру файла
+        var multType: Int = 0,
         var multVal: Int = 1
     )
 
     data class VideoItem(
+        var id: String = UUID.randomUUID().toString(), // УНИКАЛЬНЫЙ ID
         var sessionNum: String = "",
         var sessionName: String = "",
         var numExercise: String = "", var exerciseName: String = "",
@@ -463,6 +462,7 @@ class SettingsActivity : AppCompatActivity() {
         fun isComplete() = sessionNum.isNotEmpty() && exerciseName.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
         
         fun toJson(sOpt: List<String>, eOpt: List<String>) = JSONObject().apply {
+            put("id", id) // СОХРАНЯЕМ ID
             val fullS = if (sessionNum.isNotEmpty()) "$sessionNum $sessionName" else ""
             put("s_idx", sOpt.indexOf(fullS))
             put("e_idx", eOpt.indexOf(exerciseName))
@@ -487,14 +487,15 @@ class SettingsActivity : AppCompatActivity() {
                 val exName = if (eIdx in eOpt.indices) eOpt[eIdx] else ""
                 
                 val vi = VideoItem(
-                    fullSession.substringBefore(" ", ""),
-                    fullSession.substringAfter(" ", ""),
-                    j.optString("n_e"),
-                    exName,
-                    j.optString("n_f"),
-                    j.optString("f_n"),
-                    j.optLong("f_sz"),
-                    j.optString("note")
+                    id = j.optString("id", UUID.randomUUID().toString()), // ЗАГРУЖАЕМ ID
+                    sessionNum = fullSession.substringBefore(" ", ""),
+                    sessionName = fullSession.substringAfter(" ", ""),
+                    numExercise = j.optString("n_e"),
+                    exerciseName = exName,
+                    numFile = j.optString("n_f"),
+                    fileName = j.optString("f_n"),
+                    fileSizeRaw = j.optLong("f_sz"),
+                    note = j.optString("note")
                 )
                 
                 val tArr = j.optJSONArray("timings")
@@ -735,6 +736,6 @@ private fun PopupMenu.applyPopupForceShowIcon() {
     } catch (e: Exception) { Log.e("SettingsActivity", "Popup icon error", e) }
 }
 class VideoItemDiffCallback : DiffUtil.ItemCallback<SettingsActivity.VideoItem>() {
-    override fun areItemsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem.fileName == newItem.fileName
+    override fun areItemsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem.id == newItem.id
     override fun areContentsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem == newItem
 }

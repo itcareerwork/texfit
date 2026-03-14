@@ -44,6 +44,7 @@ class VideoPlayerActivity : Activity() {
     private lateinit var layoutPauseInfo: View
     private lateinit var clickInterceptor: View
 
+    private var videoItemId: String = ""
     private var videoFileName: String = ""
     private var fileNumForDisplay: String = "000"
     private var timings = mutableListOf<SettingsActivity.Timing>()
@@ -79,8 +80,10 @@ class VideoPlayerActivity : Activity() {
         clickInterceptor = findViewById(R.id.click_interceptor)
 
         val videoUri = intent.getParcelableExtra<Uri>("video_uri")
+        videoItemId = intent.getStringExtra("video_item_id") ?: ""
+
         if (videoUri != null) {
-            loadTimingsFromConfig(videoUri)
+            loadTimingsFromConfig()
             videoView.setVideoURI(videoUri)
             videoView.setOnPreparedListener { mp: MediaPlayer ->
                 seekBar.max = mp.duration
@@ -237,7 +240,7 @@ class VideoPlayerActivity : Activity() {
             weightSum = 2f
         }
 
-        // Левая колонка (Макс. упражнений)
+        // Левая колонка
         val leftBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
@@ -257,7 +260,7 @@ class VideoPlayerActivity : Activity() {
         }
         leftBox.addView(tvMax)
 
-        // Правая колонка (Множитель)
+        // Правая колонка
         val rightBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
@@ -293,7 +296,7 @@ class VideoPlayerActivity : Activity() {
                     title.startsWith("№ файла") -> { selectedMultType = 2; selectedMultVal = 1; tvMult.text = "№ файла $fileNumForDisplay" }
                     title.startsWith("x") -> {
                         selectedMultType = 1
-                        selectedMultVal = title.substring(1).toInt()
+                        selectedMultVal = if (title.length > 1) title.substring(1).toInt() else 1
                         tvMult.text = "x$selectedMultVal"
                     }
                 }
@@ -341,7 +344,7 @@ class VideoPlayerActivity : Activity() {
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
     }
 
-    private fun loadTimingsFromConfig(uri: Uri) {
+    private fun loadTimingsFromConfig() {
         try {
             val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
@@ -349,13 +352,11 @@ class VideoPlayerActivity : Activity() {
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 val json = JSONObject(inputStream.bufferedReader().readText())
                 val videoItems = json.optJSONArray("video_items") ?: return
-                val docFile = DocumentFile.fromSingleUri(this, uri)
-                videoFileName = docFile?.name ?: ""
                 
                 for (i in 0 until videoItems.length()) {
                     val item = videoItems.getJSONObject(i)
-                    if (item.optString("f_n") == videoFileName) {
-                        // ИСПРАВЛЕНИЕ: Берем № файла (n_f), а не № упр (n_e)
+                    if (item.optString("id") == videoItemId) { // ИЩЕМ ПО UUID
+                        videoFileName = item.optString("f_n")
                         fileNumForDisplay = item.optString("n_f", "000")
                         val tArr = item.optJSONArray("timings")
                         timings.clear()
@@ -387,7 +388,7 @@ class VideoPlayerActivity : Activity() {
             val videoItems = json.optJSONArray("video_items") ?: return
             for (i in 0 until videoItems.length()) {
                 val item = videoItems.getJSONObject(i)
-                if (item.optString("f_n") == videoFileName) {
+                if (item.optString("id") == videoItemId) { // СОХРАНЯЕМ ПО UUID
                     val tArr = JSONArray()
                     timings.forEach { 
                         val tObj = JSONObject()

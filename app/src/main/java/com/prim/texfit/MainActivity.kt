@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
     }
 
-    data class PlaylistItem(val uri: Uri, val isWatched: Boolean, val debugInfo: String)
+    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val debugInfo: String)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
@@ -84,30 +84,36 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
+                // Преобразуем video_items в удобную карту по ID
+                val videoItemsMap = mutableMapOf<String, JSONObject>()
+                for (i in 0 until videoItemsArray.length()) {
+                    val item = videoItemsArray.getJSONObject(i)
+                    val id = item.optString("id")
+                    if (id.isNotEmpty()) videoItemsMap[id] = item
+                }
+
                 val playlist = mutableListOf<PlaylistItem>()
                 for (i in 0 until titlesArray.length()) {
                     val entry = titlesArray.optJSONArray(i) ?: continue
-                    val idx = entry.optInt(0, -1)
+                    val id = entry.optString(0)
                     val status = entry.optInt(1, 0)
                     
-                    if (idx in 0 until videoItemsArray.length()) {
-                        val itemJson = videoItemsArray.getJSONObject(idx)
-                        val fileName = itemJson.optString("f_n")
-                        
-                        val sIdx = itemJson.optInt("s_idx", -1)
-                        val eIdx = itemJson.optInt("e_idx", -1)
-                        val fullSession = if (sIdx in sessionOptions.indices) sessionOptions[sIdx] else ""
-                        val sessionName = fullSession.substringAfter(" ", "")
-                        val exerciseName = if (eIdx in exerciseOptions.indices) exerciseOptions[eIdx] else ""
-                        val numExercise = itemJson.optString("n_e")
-                        val numFile = itemJson.optString("n_f")
-                        
-                        val debugStr = "|$sessionName|$numExercise $exerciseName|$numFile|"
+                    val itemJson = videoItemsMap[id] ?: continue
+                    val fileName = itemJson.optString("f_n")
+                    
+                    val sIdx = itemJson.optInt("s_idx", -1)
+                    val eIdx = itemJson.optInt("e_idx", -1)
+                    val fullSession = if (sIdx in sessionOptions.indices) sessionOptions[sIdx] else ""
+                    val sessionName = fullSession.substringAfter(" ", "")
+                    val exerciseName = if (eIdx in exerciseOptions.indices) exerciseOptions[eIdx] else ""
+                    val numExercise = itemJson.optString("n_e")
+                    val numFile = itemJson.optString("n_f")
+                    
+                    val debugStr = "|$sessionName|$numExercise $exerciseName|$numFile|"
 
-                        if (fileName.isNotEmpty()) {
-                            folder.findFile(fileName)?.uri?.let { uri ->
-                                playlist.add(PlaylistItem(uri, status == 1, debugStr))
-                            }
+                    if (fileName.isNotEmpty()) {
+                        folder.findFile(fileName)?.uri?.let { uri ->
+                            playlist.add(PlaylistItem(id, uri, status == 1, debugStr))
                         }
                     }
                 }
@@ -204,7 +210,6 @@ class MainActivity : AppCompatActivity() {
                 holder.imageView.setImageResource(android.R.drawable.ic_menu_report_image)
             }
 
-            // Засветление при просмотре (увеличение прозрачности на белом фоне)
             holder.imageView.alpha = if (item.isWatched) 0.3f else 1.0f
 
             holder.ivCheck.setImageResource(
@@ -219,6 +224,7 @@ class MainActivity : AppCompatActivity() {
             holder.imageView.setOnClickListener {
                 val intent = Intent(this@MainActivity, VideoPlayerActivity::class.java)
                 intent.putExtra("video_uri", item.uri)
+                intent.putExtra("video_item_id", item.id) // ПЕРЕДАЕМ UUID
                 startActivity(intent)
             }
         }
@@ -232,7 +238,7 @@ class MainActivity : AppCompatActivity() {
 
     private class PlaylistDiffCallback : DiffUtil.ItemCallback<PlaylistItem>() {
         override fun areItemsTheSame(oldItem: PlaylistItem, newItem: PlaylistItem): Boolean = 
-            oldItem.uri == newItem.uri
+            oldItem.id == newItem.id
         override fun areContentsTheSame(oldItem: PlaylistItem, newItem: PlaylistItem): Boolean = 
             oldItem == newItem
     }
