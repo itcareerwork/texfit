@@ -141,7 +141,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="2.4"
                     android:gravity="center"
-                    android:text="Файлы"
+                    android:text="Название"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />

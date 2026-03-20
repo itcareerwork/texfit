@@ -362,7 +362,7 @@ class SettingsActivity : AppCompatActivity() {
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
                 hColor.text = headersJson.optString("col", "Цвет"); hCat1.text = headersJson.optString("cat1", "Сеанс")
-                hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Файлы")
+                hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Название")
                 hSize.text = headersJson.optString("size", "Размер"); hNote.text = headersJson.optString("note", "Прим.")
             }
             
@@ -410,7 +410,16 @@ class SettingsActivity : AppCompatActivity() {
         filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
             updatedItems.add(VideoItem(id = UUID.randomUUID().toString(), fileName = file.name ?: "", fileSizeRaw = file.length()))
         }
-        saveToConfig(folder, updatedItems)
+
+        // Поправка: Сначала активированные (зеленые), затем по Сеанс - № Упражнения - № Файла
+        val sortedItems = updatedItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }
+            .thenBy { it.sessionNum.toIntOrNull() ?: Int.MAX_VALUE }
+            .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
+            .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
+            .thenBy { it.fileName }
+        )
+
+        saveToConfig(folder, sortedItems)
         loadUIFromConfig()
         Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
     }
@@ -497,7 +506,8 @@ class SettingsActivity : AppCompatActivity() {
         var numExercise: String = "", var exerciseName: String = "",
         var numFile: String = "", var fileName: String = "",
         var fileSizeRaw: Long = 0, var note: String = "",
-        var timings: MutableList<Timing> = mutableListOf()
+        var timings: MutableList<Timing> = mutableListOf(),
+        var customName: String = ""
     ) {
         fun isComplete() = sessionNum.isNotEmpty() && exerciseName.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
         
@@ -508,6 +518,7 @@ class SettingsActivity : AppCompatActivity() {
             put("e_idx", eOpt.indexOf(exerciseName))
             put("n_e", numExercise); put("n_f", numFile)
             put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note)
+            put("c_n", customName)
             
             val tArr = JSONArray()
             timings.forEach { 
@@ -536,7 +547,8 @@ class SettingsActivity : AppCompatActivity() {
                     numFile = j.optString("n_f"),
                     fileName = j.optString("f_n"),
                     fileSizeRaw = j.optLong("f_sz"),
-                    note = j.optString("note")
+                    note = j.optString("note"),
+                    customName = j.optString("c_n")
                 )
                 
                 val tArr = j.optJSONArray("timings")
@@ -578,7 +590,9 @@ class SettingsActivity : AppCompatActivity() {
                 indicator.setBackgroundColor(if (item.isComplete()) 0xFF4CAF50.toInt() else 0xFFF44336.toInt())
                 sN.text = if (item.sessionNum.isNotEmpty()) "${item.sessionNum} ${item.sessionName}" else ""
                 nE.text = item.numExercise; eN.text = item.exerciseName
-                nF.text = item.numFile; fN.text = item.fileName; note.text = item.note
+                nF.text = item.numFile
+                fN.text = if (item.customName.isNotEmpty()) item.customName else item.fileName
+                note.text = item.note
                 fS.text = formatFileSize(item.fileSizeRaw)
                 sN.setOnClickListener { showOptionsDialog("Сеанс", sessionOptions, pos) { showAddSessionDialog(pos) } }
                 nE.setOnClickListener { 
@@ -590,6 +604,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (getItem(pos).exerciseName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_exercise_first), Toast.LENGTH_SHORT).show() 
                     else showFileNumPopup(pos) 
                 }
+                fN.setOnClickListener { showFileNameEditDialog(pos) }
                 note.setOnClickListener { showNoteEditDialog(pos) }
             }
 
@@ -695,6 +710,42 @@ class SettingsActivity : AppCompatActivity() {
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItem(pos, getItem(pos).copy(note = input.text.toString())) }
                     .setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
+            }
+            private fun showFileNameEditDialog(pos: Int) {
+                val item = getItem(pos)
+                val baseName = item.fileName.substringBeforeLast(".")
+                val initialText = if (item.customName.isNotEmpty()) item.customName else baseName
+                
+                val layout = LinearLayout(this@SettingsActivity).apply { 
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(40, 20, 40, 0) 
+                }
+                
+                val input = EditText(this@SettingsActivity).apply { 
+                    setText(initialText)
+                    hint = "Введите название"
+                }
+                
+                val fileNameLabel = TextView(this@SettingsActivity).apply {
+                    text = item.fileName
+                    textSize = 12f
+                    alpha = 0.6f
+                    setPadding(0, 8, 0, 0)
+                }
+                
+                layout.addView(input)
+                layout.addView(fileNameLabel)
+                
+                val dialog = AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("Название")
+                    .setView(layout)
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> 
+                        updateItem(pos, getItem(pos).copy(customName = input.text.toString().trim())) 
+                    }
+                    .setNegativeButton(getString(R.string.dialog_cancel), null)
+                    .create()
+                dialog.setOnShowListener { tintDialogButtons(dialog) }
+                dialog.show()
             }
             private fun showAddSessionDialog(pos: Int) {
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }

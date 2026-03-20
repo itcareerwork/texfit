@@ -60,7 +60,6 @@ class VideoPlayerActivity : Activity() {
     private lateinit var layoutPauseInfo: View
     private lateinit var clickInterceptor: View
 
-    // Новые элементы для нижнего секундомера
     private lateinit var layoutBottomStopwatch: View
     private lateinit var tvBottomStopwatchTime: TextView
     private lateinit var btnStopwatchToggle: Button
@@ -70,7 +69,7 @@ class VideoPlayerActivity : Activity() {
     private var fileNumForDisplay: String = "000"
     private var itemIndexInPlaylist: Int = -1
     private var timings = mutableListOf<SettingsActivity.Timing>()
-    
+
     private var activeTiming: SettingsActivity.Timing? = null
     private var isSeeking: Boolean = false
     private var activeTimingTime: Int = -1
@@ -84,7 +83,6 @@ class VideoPlayerActivity : Activity() {
     private var lastIssuedSeekRealtime: Long = 0L
     private var userSeekAnchorPos: Int? = null
 
-    // Настройки режима
     private var isExerciseMode: Boolean = true
     private var isStopwatchVisible: Boolean = false
     private var stopwatchBaseTime: Long = 0L
@@ -93,7 +91,8 @@ class VideoPlayerActivity : Activity() {
     private fun beginSeek(targetMs: Int) {
         val now = SystemClock.elapsedRealtime()
         if (lastIssuedSeekTarget == targetMs && now - lastIssuedSeekRealtime < 350) return
-        if (kotlin.math.abs(player.currentPosition.toInt() - targetMs) <= 25) return
+        val current = player.currentPosition.toInt()
+        if (kotlin.math.abs(current - targetMs) <= 25) return
 
         lastIssuedSeekTarget = targetMs
         lastIssuedSeekRealtime = now
@@ -114,7 +113,7 @@ class VideoPlayerActivity : Activity() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    
+
     private val updateSeekRunnable = object : Runnable {
         override fun run() {
             try {
@@ -136,8 +135,6 @@ class VideoPlayerActivity : Activity() {
 
         playerView = findViewById(R.id.player_view)
         playerView.useController = false
-        playerView.controllerAutoShow = false
-        playerView.controllerHideOnTouch = false
         seekBar = findViewById(R.id.seek_bar)
         btnStop = findViewById(R.id.btn_stop)
         btnPrev = findViewById(R.id.btn_prev)
@@ -152,7 +149,6 @@ class VideoPlayerActivity : Activity() {
         layoutPauseInfo = findViewById(R.id.layout_pause_info)
         clickInterceptor = findViewById(R.id.click_interceptor)
 
-        // Нижний секундомер
         layoutBottomStopwatch = findViewById(R.id.layout_bottom_stopwatch)
         tvBottomStopwatchTime = findViewById(R.id.tv_bottom_stopwatch_time)
         btnStopwatchToggle = findViewById(R.id.btn_stopwatch_toggle)
@@ -162,15 +158,10 @@ class VideoPlayerActivity : Activity() {
         itemIndexInPlaylist = intent.getIntExtra("item_index", -1)
         val lastPos = intent.getIntExtra("last_pos", 0)
 
-        // Первоначальная загрузка из Prefs
-        val prefs = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE)
-        isStopwatchVisible = prefs.getBoolean("stopwatch_enabled_pref", false)
-        isExerciseMode = true 
-
         if (videoUri != null) {
-            loadTimingsFromConfig() 
+            loadTimingsFromConfig()
             setupStopwatch()
-            
+
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
             player.setSeekParameters(SeekParameters.EXACT)
@@ -229,12 +220,12 @@ class VideoPlayerActivity : Activity() {
             }
         }
 
-        btnStop.setOnClickListener { 
+        btnStop.setOnClickListener {
             saveCurrentPositionToConfig(player.currentPosition.toInt())
             player.stop()
-            finish() 
+            finish()
         }
-        
+
         btnPrev.setOnClickListener {
             val pos = player.currentPosition.toInt()
             val sorted = timings.sortedBy { it.time }
@@ -254,6 +245,10 @@ class VideoPlayerActivity : Activity() {
             val nextTiming = timings.filter { it.time > pos + 100 }.minByOrNull { it.time }
             if (nextTiming != null) {
                 beginSeek(clampSeekTarget(nextTiming.time + 10))
+            } else {
+                // Если мы на последнем сегменте, завершаем видео
+                saveCurrentPositionToConfig(0)
+                finish()
             }
             resetTaskTimer()
             updateUIState()
@@ -323,6 +318,7 @@ class VideoPlayerActivity : Activity() {
         if (d != C.TIME_UNSET) {
             val pos = d.toInt()
             val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
+            // Если последний сегмент требует повтора
             if (currentTiming != null && currentTiming.isEnabled && currentTiming.max > 0L) {
                 val currMs = currentTiming.curr.coerceAtLeast(0L)
                 if (segmentPlayedMs < currMs) {
@@ -348,7 +344,7 @@ class VideoPlayerActivity : Activity() {
         val sorted = timings.sortedBy { it.time }
         val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time } ?: return
 
-        // 1.1.1: If disabled for segment, play normally
+        // 1.1.1: Обычный режим сегмента
         if (!currentTiming.isEnabled) {
             layoutCounterContainer.visibility = View.GONE
             activeTiming = null
@@ -362,22 +358,25 @@ class VideoPlayerActivity : Activity() {
 
         val nextTiming = sorted.filter { it.time > currentTiming.time }.minByOrNull { it.time }
         val segmentStart = currentTiming.time
-        val segmentEnd = nextTiming?.time ?: (if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt())
+        val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
+        val segmentEnd = nextTiming?.time ?: totalDur
 
-        // 1.1.2: If MAX = 0 and segment is enabled, skip it
+        // 1.1.2: Пропуск сегмента при MAX = 0
         if (currentTiming.max <= 0L) {
             layoutCounterContainer.visibility = View.GONE
             if (isPlaying && !isSeeking) {
                 if (nextTiming != null) {
                     val target = clampSeekTarget(segmentEnd + 10)
-                    // Увеличена точность пропуска
                     if (pos < target - 20) {
                         clearActiveSegmentState()
                         beginSeek(target)
                         return
                     }
                 } else {
-                    handlePlayerEnded()
+                    // Последний сегмент - завершаем видео
+                    clearActiveSegmentState()
+                    saveCurrentPositionToConfig(0)
+                    finish()
                     return
                 }
             }
@@ -390,6 +389,7 @@ class VideoPlayerActivity : Activity() {
             return
         }
 
+        // Логика активного упражнения
         if (activeTimingTime != currentTiming.time) {
             activeTiming = currentTiming
             activeTimingTime = currentTiming.time
@@ -404,18 +404,21 @@ class VideoPlayerActivity : Activity() {
 
         val currMs = currentTiming.curr.coerceAtLeast(0L)
         if (currMs == 0L) {
+            // Пропуск если текущее значение упражнения = 0
             if (nextTiming != null && segmentEnd > segmentStart) {
-                pendingSkipZeroCurr = true
-                if (isPlaying) {
+                if (isPlaying && !isSeeking) {
                     val target = clampSeekTarget(segmentEnd + 10)
-                    if (pos < target - 50 && !isSeeking) {
-                        pendingSkipZeroCurr = false
+                    if (pos < target - 50) {
                         clearActiveSegmentState()
                         beginSeek(target)
                     }
                 }
-            } else {
-                pendingSkipZeroCurr = false
+            } else if (nextTiming == null) {
+                // Последний сегмент с curr=0
+                if (isPlaying && !isSeeking) {
+                    saveCurrentPositionToConfig(0)
+                    finish()
+                }
             }
             tvExerciseCounter.text = formatTime(0)
             circularTimer.progress = 0
@@ -424,18 +427,7 @@ class VideoPlayerActivity : Activity() {
             return
         }
 
-        if (pendingSkipZeroCurr && isPlaying && nextTiming != null && segmentEnd > segmentStart && !isSeeking) {
-            val target = clampSeekTarget(segmentEnd + 10)
-            if (pos < target - 50) {
-                pendingSkipZeroCurr = false
-                clearActiveSegmentState()
-                beginSeek(target)
-                return
-            } else {
-                pendingSkipZeroCurr = false
-            }
-        }
-
+        // Накопление времени воспроизведения
         val now = SystemClock.elapsedRealtime()
         if (isPlaying && !isSeeking) {
             val dt = now - lastTickRealtime
@@ -448,6 +440,7 @@ class VideoPlayerActivity : Activity() {
         tvExerciseCounter.text = formatTime(remainingMs.toInt())
         circularTimer.progress = ((remainingMs.toFloat() / currMs.toFloat()) * 100f).toInt().coerceIn(0, 100)
 
+        // Переход на следующий сегмент по завершении упражнения
         if (segmentPlayedMs >= currMs) {
             if (nextTiming != null) {
                 val target = clampSeekTarget(segmentEnd + 10)
@@ -456,13 +449,18 @@ class VideoPlayerActivity : Activity() {
                     beginSeek(target)
                 }
             } else {
-                clearActiveSegmentState()
+                // Конец видео, упражнение на последнем отрезке выполнено.
+                // Завершаем активность сразу, чтобы избежать "отскоков" и зацикливания таймера.
+                if (!isSeeking) {
+                    saveCurrentPositionToConfig(0)
+                    finish()
+                }
             }
             return
         }
 
-        val segmentLen = (segmentEnd - segmentStart).coerceAtLeast(0)
-        if (segmentLen > 0 && isPlaying && !isSeeking) {
+        // Зацикливание внутри сегмента, если упражнение еще не закончено
+        if (isPlaying && !isSeeking) {
             val endEpsilon = 150
             val timeLeftInSegment = (segmentEnd - pos).coerceAtLeast(0)
             val shouldLoop = timeLeftInSegment <= endEpsilon && remainingMs > (timeLeftInSegment + 50L)
@@ -487,10 +485,14 @@ class VideoPlayerActivity : Activity() {
             timings.add(SettingsActivity.Timing(0, 0, 0, 0, 1, 1, true))
             changed = true
         }
-        if (duration > 0 && timings.none { it.time == duration }) {
-            timings.add(SettingsActivity.Timing(duration, 0, 0, 0, 1, 1, true))
+
+        // Удаляем любые метки, которые находятся слишком близко к концу (менее 1 сек)
+        val initialSize = timings.size
+        timings.removeAll { it.time >= duration - 1000 && it.time > 0 }
+        if (timings.size != initialSize) {
             changed = true
         }
+
         if (changed) {
             timings.sortBy { it.time }
             saveTimingsToConfig()
@@ -528,6 +530,7 @@ class VideoPlayerActivity : Activity() {
         val nextTiming = sorted.filter { it.time > pos }.minByOrNull { it.time }
         val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
         val targetTiming = exactTiming ?: currentTiming
+        val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
 
         val dialogView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -552,8 +555,7 @@ class VideoPlayerActivity : Activity() {
 
         var currentMax = targetTiming?.max ?: 0L
         var currentStep = targetTiming?.step ?: 0L
-        val isMaxEnabled = { currentMax > 0L }
-        
+
         val btnMax = createTimeButton("ЛИМИТ (MAX):", currentMax) { newMs ->
             currentMax = newMs
             updateUIEnabledStateForDialog(exerciseSettingsContainer, switchExercise.isChecked, currentMax > 0)
@@ -565,11 +567,11 @@ class VideoPlayerActivity : Activity() {
         btnStep.tag = "step_group"
         exerciseSettingsContainer.addView(btnStep)
 
-        exerciseSettingsContainer.addView(TextView(this).apply { 
+        exerciseSettingsContainer.addView(TextView(this).apply {
             text = "Множитель:"; textSize = 12f; setPadding(0, 20, 0, 0)
             tag = "mult_label"
         })
-        
+
         var selectedMultType = targetTiming?.multType ?: 0
         var selectedMultVal = targetTiming?.multVal ?: 1
         val tvMult = TextView(this).apply {
@@ -608,7 +610,7 @@ class VideoPlayerActivity : Activity() {
         exerciseSettingsContainer.addView(tvMult)
         dialogView.addView(exerciseSettingsContainer)
 
-        switchExercise.setOnCheckedChangeListener { _, isChecked -> 
+        switchExercise.setOnCheckedChangeListener { _, isChecked ->
             updateUIEnabledStateForDialog(exerciseSettingsContainer, isChecked, currentMax > 0)
         }
         updateUIEnabledStateForDialog(exerciseSettingsContainer, switchExercise.isChecked, currentMax > 0)
@@ -619,10 +621,9 @@ class VideoPlayerActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = 30 }
             setOnClickListener {
                 timings.clear()
-                val d = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
-                addDefaultTimings(d)
+                addDefaultTimings(if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt())
                 saveTimingsToConfig()
-                drawTicks(d)
+                drawTicks(if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt())
                 resetTaskTimer()
                 updateUIState()
                 Toast.makeText(this@VideoPlayerActivity, "Тайминги сброшены", Toast.LENGTH_SHORT).show()
@@ -630,8 +631,9 @@ class VideoPlayerActivity : Activity() {
         }
         dialogView.addView(btnClearAll)
 
+        val nextLabel = if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)
         val builder = AlertDialog.Builder(this)
-            .setTitle("Установить ${formatTime(targetTiming?.time ?: 0)} - ${formatTime(nextTiming?.time ?: (if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()))}")
+            .setTitle("Установить ${formatTime(targetTiming?.time ?: 0)} - $nextLabel")
             .setView(dialogView)
             .setPositiveButton("Сохранить") { _, _ ->
                 if (exactTiming != null) {
@@ -645,11 +647,10 @@ class VideoPlayerActivity : Activity() {
                 drawTicks(if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()); resetTaskTimer(); updateUIState()
             }
             .setNegativeButton("Отмена", null)
-        
-        val durationNow = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
-        if (exactTiming != null && exactTiming.time != 0 && exactTiming.time != durationNow) {
+
+        if (exactTiming != null && exactTiming.time != 0) {
             builder.setNeutralButton("Удалить") { _, _ ->
-                timings.remove(exactTiming); saveTimingsToConfig(); drawTicks(durationNow); resetTaskTimer(); updateUIState()
+                timings.remove(exactTiming); saveTimingsToConfig(); drawTicks(totalDur); resetTaskTimer(); updateUIState()
             }
         }
 
@@ -667,11 +668,11 @@ class VideoPlayerActivity : Activity() {
 
         setViewAndChildrenEnabled(btnMax, swOn)
         btnMax.alpha = if (swOn) 1f else 0.35f
-        
+
         val stepMultEnabled = swOn && maxOn
         setViewAndChildrenEnabled(btnStep, stepMultEnabled)
         btnStep.alpha = if (stepMultEnabled) 1f else 0.35f
-        
+
         setViewAndChildrenEnabled(tvMult, stepMultEnabled)
         tvMult.alpha = if (stepMultEnabled) 1f else 0.35f
         multLabel.alpha = if (stepMultEnabled) 1f else 0.35f
@@ -707,12 +708,12 @@ class VideoPlayerActivity : Activity() {
                 onResult((mins * 60 + secs.coerceIn(0, 59)) * 1000L)
             }
             .setNegativeButton("Отмена", null).create()
-        
+
         d.show()
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
         d.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(greenColor)
         d.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(greenColor)
-        
+
         etMin.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(etMin, InputMethodManager.SHOW_IMPLICIT)
@@ -745,7 +746,7 @@ class VideoPlayerActivity : Activity() {
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 json = JSONObject(inputStream.bufferedReader().readText())
             } ?: return
-            
+
             val titlesArray = json.optJSONArray("titles") ?: return
             val entry = titlesArray.optJSONArray(itemIndexInPlaylist) ?: return
             entry.put(2, pos)
@@ -763,11 +764,11 @@ class VideoPlayerActivity : Activity() {
             val configFile = folder.findFile("texfit.cfg") ?: return
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 val json = JSONObject(inputStream.bufferedReader().readText())
-                
+
                 if (json.has("stopwatch_enabled")) {
                     isStopwatchVisible = json.getBoolean("stopwatch_enabled")
                 }
-                
+
                 val videoItems = json.optJSONArray("video_items") ?: return
                 for (i in 0 until videoItems.length()) {
                     val item = videoItems.getJSONObject(i)
@@ -807,7 +808,7 @@ class VideoPlayerActivity : Activity() {
                 val item = videoItems.getJSONObject(i)
                 if (item.optString("id") == videoItemId) {
                     val tArr = JSONArray()
-                    timings.forEach { 
+                    timings.forEach {
                         val tObj = JSONObject()
                         tObj.put("t", it.time); tObj.put("m", it.max); tObj.put("c", it.curr)
                         tObj.put("s", it.step); tObj.put("mt", it.multType); tObj.put("mv", it.multVal)
