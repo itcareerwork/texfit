@@ -26,11 +26,13 @@ import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
+import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private val adapter = PlaylistAdapter()
+    private var isFirstResume = true
 
     companion object {
         private const val PREFS_NAME = "TexfitPrefs"
@@ -53,7 +55,67 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (isFirstResume) {
+            checkAndPerformAutoLaunch()
+            isFirstResume = false
+        }
         loadPlaylistFromConfig()
+    }
+
+    private fun checkAndPerformAutoLaunch() {
+        val folderUriStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(SELECTED_FOLDER_URI_KEY, null) ?: return
+        val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
+        val configFile = findConfigFile(folder) ?: return
+
+        try {
+            val json: JSONObject
+            contentResolver.openInputStream(configFile.uri).use { inputStream ->
+                json = JSONObject(inputStream?.bufferedReader()?.readText() ?: return)
+            }
+
+            val trainingTimeJson = json.opt("training_time")
+            val timeStr: String
+            var lastLaunchTs: Long = 0L
+
+            if (trainingTimeJson is JSONObject) {
+                timeStr = trainingTimeJson.optString("value", "00:00")
+                lastLaunchTs = trainingTimeJson.optLong("last_auto_launch_ts", 0L)
+            } else {
+                timeStr = json.optString("training_time", "00:00")
+            }
+
+            if (timeStr == "00:00") return
+
+            val parts = timeStr.split(":")
+            if (parts.size != 2) return
+            val hour = parts[0].toInt()
+            val minute = parts[1].toInt()
+
+            val now = Calendar.getInstance()
+            val target = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute)
+                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+
+            val nowMs = now.timeInMillis
+            val targetMs = target.timeInMillis
+
+            if (nowMs >= targetMs && lastLaunchTs < targetMs) {
+                SettingsActivity.applyLaunchLogic(json)
+                
+                val updatedTimeObj = json.optJSONObject("training_time") ?: JSONObject()
+                updatedTimeObj.put("value", timeStr)
+                updatedTimeObj.put("last_auto_launch_ts", nowMs)
+                json.put("training_time", updatedTimeObj)
+
+                contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
+                    OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Auto-launch check failed", e)
+        }
     }
 
     private fun loadPlaylistFromConfig() {
@@ -96,7 +158,7 @@ class MainActivity : AppCompatActivity() {
                     val entry = titlesArray.optJSONArray(i) ?: continue
                     val id = entry.optString(0)
                     val status = entry.optInt(1, 0)
-                    val lastPos = entry.optInt(2, 0) // ПОЗИЦИЯ ПАУЗЫ
+                    val lastPos = entry.optInt(2, 0) 
                     
                     val itemJson = videoItemsMap[id] ?: continue
                     val fileName = itemJson.optString("f_n")
@@ -225,8 +287,8 @@ class MainActivity : AppCompatActivity() {
                 val intent = Intent(this@MainActivity, VideoPlayerActivity::class.java)
                 intent.putExtra("video_uri", item.uri)
                 intent.putExtra("video_item_id", item.id)
-                intent.putExtra("last_pos", item.lastPos) // ПЕРЕДАЕМ ПОЗИЦИЮ ПАУЗЫ
-                intent.putExtra("item_index", position) // ИНДЕКС В ПЛЕЙЛИСТЕ
+                intent.putExtra("last_pos", item.lastPos) 
+                intent.putExtra("item_index", position) 
                 startActivity(intent)
             }
         }

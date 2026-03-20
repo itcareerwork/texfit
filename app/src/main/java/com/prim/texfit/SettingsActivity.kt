@@ -59,6 +59,116 @@ class SettingsActivity : AppCompatActivity() {
         private const val TAG = "SettingsActivity"
         private const val CONFIG_FILE_NAME = "texfit.cfg"
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
+
+        fun applyLaunchLogic(json: JSONObject): JSONObject {
+            val sessionOptions = mutableListOf<String>()
+            json.optJSONArray("session_options")?.let { arr ->
+                for (i in 0 until arr.length()) sessionOptions.add(arr.getString(i))
+            }
+            val exerciseOptions = mutableListOf<String>()
+            json.optJSONArray("exercise_options")?.let { arr ->
+                for (i in 0 until arr.length()) exerciseOptions.add(arr.getString(i))
+            }
+            val categoryState = mutableMapOf<String, String>()
+            json.optJSONObject("category_state")?.let { obj ->
+                obj.keys().forEach { key -> categoryState[key] = obj.getString(key) }
+            }
+            val resetState = mutableMapOf<String, String>()
+            json.optJSONObject("reset_state")?.let { obj ->
+                obj.keys().forEach { key -> resetState[key] = obj.getString(key) }
+            }
+            val videoItemsArray = json.optJSONArray("video_items") ?: JSONArray()
+            val allItems = mutableListOf<VideoItem>()
+            for (i in 0 until videoItemsArray.length()) {
+                allItems.add(VideoItem.fromJson(videoItemsArray.getJSONObject(i), sessionOptions, exerciseOptions))
+            }
+
+            val sourceTable = allItems.filter { it.isComplete() }
+                .sortedWith(compareBy(
+                    { it.sessionNum.toIntOrNull() ?: 0 },
+                    { it.numExercise.toIntOrNull() ?: 0 },
+                    { it.numFile.toIntOrNull() ?: 0 }
+                ))
+
+            val selectedItems = mutableListOf<VideoItem>()
+            val changedExercises = mutableSetOf<String>()
+            val slotGroups = sourceTable.groupBy { "${it.sessionNum}:${it.numExercise}" }
+
+            for (group in slotGroups.values) {
+                val firstRow = group.first()
+                val exName = firstRow.exerciseName
+                val currentState = categoryState[exName]?.toIntOrNull() ?: 0
+                var nextStep = currentState + 1
+                
+                val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
+                if (exerciseFiles.isEmpty()) continue
+                val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+                val resetVal = resetState[exName]?.toIntOrNull() ?: 0
+                if (nextStep > limit) nextStep = resetVal
+                
+                for (row in group) {
+                    if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
+                        selectedItems.add(row)
+                        categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
+                        changedExercises.add(exName)
+                        break 
+                    }
+                }
+            }
+
+            for (exName in categoryState.keys) {
+                if (exName !in changedExercises) {
+                    val currentState = categoryState[exName]?.toIntOrNull() ?: 0
+                    val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
+                    if (exerciseFiles.isNotEmpty()) {
+                        val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+                        val resetVal = resetState[exName]?.toIntOrNull() ?: 0
+                        var nextStep = currentState + 1
+                        if (nextStep > limit) nextStep = resetVal
+                        categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
+                    }
+                }
+            }
+
+            selectedItems.forEach { item ->
+                val fileNum = item.numFile.toIntOrNull() ?: 1
+                item.timings.forEach { t ->
+                    if (t.max > 0) {
+                        val multiplier = when(t.multType) {
+                            1 -> t.multVal.toLong()
+                            2 -> fileNum.toLong()
+                            else -> 1L
+                        }
+                        val newCurr = when {
+                            t.curr == 0L -> t.step
+                            t.curr == t.step && multiplier > 1 -> t.step * multiplier
+                            else -> t.curr + (t.step * multiplier)
+                        }
+                        t.curr = newCurr.coerceAtMost(t.max)
+                    }
+                }
+            }
+
+            val newItemsArray = JSONArray()
+            allItems.forEach { newItemsArray.put(it.toJson(sessionOptions, exerciseOptions)) }
+            json.put("video_items", newItemsArray)
+            
+            val stateObj = JSONObject()
+            categoryState.forEach { (k, v) -> stateObj.put(k, v) }
+            json.put("category_state", stateObj)
+
+            val titlesArray = JSONArray()
+            selectedItems.forEach { selected ->
+                val entry = JSONArray()
+                entry.put(selected.id) 
+                entry.put(0) // status
+                entry.put(0) // last playback position (ms)
+                titlesArray.put(entry)
+            }
+            json.put("titles", titlesArray)
+
+            return json
+        }
     }
 
     private lateinit var selectedFolderPathTextView: TextView
@@ -80,6 +190,8 @@ class SettingsActivity : AppCompatActivity() {
     private var categoryState = mutableMapOf<String, String>()
     private var resetState = mutableMapOf<String, String>()
     private var activeExercisesOrder = mutableListOf<String>()
+    
+    private var lastAutoLaunchTs: Long = 0L
 
     private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
@@ -121,7 +233,6 @@ class SettingsActivity : AppCompatActivity() {
         etTopInput = findViewById(R.id.et_top_input)
         cbStopwatch = findViewById(R.id.cb_stopwatch_enabled)
         
-        // Цвет чебокса зеленый (Task 1)
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
         cbStopwatch.buttonTintList = ColorStateList.valueOf(greenColor)
         
@@ -144,7 +255,6 @@ class SettingsActivity : AppCompatActivity() {
         tvSetTime.setOnClickListener { showTimePicker() }
 
         cbStopwatch.setOnCheckedChangeListener { _, isChecked ->
-            // Сохраняем в файл при изменении
             getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
         }
 
@@ -152,91 +262,25 @@ class SettingsActivity : AppCompatActivity() {
         loadUIFromConfig()
     }
 
-    private fun applySortingAndSelectionLogic(): List<VideoItem> {
-        val allItems = adapter.currentList
-        val sourceTable = allItems.filter { it.isComplete() }
-            .sortedWith(compareBy(
-                { it.sessionNum.toIntOrNull() ?: 0 },
-                { it.numExercise.toIntOrNull() ?: 0 },
-                { it.numFile.toIntOrNull() ?: 0 }
-            ))
-
-        val resultTable = mutableListOf<VideoItem>()
-        val changedExercises = mutableSetOf<String>()
-        val slotGroups = sourceTable.groupBy { "${it.sessionNum}:${it.numExercise}" }
-
-        for (group in slotGroups.values) {
-            val firstRow = group.first()
-            val exName = firstRow.exerciseName
-            val currentState = categoryState[exName]?.toIntOrNull() ?: 0
-            var nextStep = currentState + 1
-            
-            val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
-            if (exerciseFiles.isEmpty()) continue
-            val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-            val resetVal = resetState[exName]?.toIntOrNull() ?: 0
-            if (nextStep > limit) nextStep = resetVal
-            
-            for (row in group) {
-                if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
-                    resultTable.add(row)
-                    categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
-                    changedExercises.add(exName)
-                    break 
-                }
-            }
-        }
-
-        for (exName in categoryState.keys) {
-            if (exName !in changedExercises) {
-                val currentState = categoryState[exName]?.toIntOrNull() ?: 0
-                val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
-                if (exerciseFiles.isNotEmpty()) {
-                    val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                    val resetVal = resetState[exName]?.toIntOrNull() ?: 0
-                    var nextStep = currentState + 1
-                    if (nextStep > limit) nextStep = resetVal
-                    categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
-                }
-            }
-        }
-        return resultTable
-    }
-
     private fun performLaunchStep() {
-        val selectedItems = applySortingAndSelectionLogic()
+        val folder = getFolderDocumentFile() ?: return
+        val configFile = findConfigFileForRead(folder) ?: return
+        val json = readConfigJson(configFile) ?: return
         
-        // ОБНОВЛЕННАЯ ЛОГИКА ИНКРЕМЕНТА: 0 -> Шаг -> Шаг*Множитель
-        selectedItems.forEach { item ->
-            val fileNum = item.numFile.toIntOrNull() ?: 1
-            item.timings.forEach { t ->
-                if (t.max > 0) {
-                    val multiplier = when(t.multType) {
-                        1 -> t.multVal.toLong()
-                        2 -> fileNum.toLong()
-                        else -> 1L
-                    }
-                    
-                    val newCurr = when {
-                        t.curr == 0L -> t.step
-                        t.curr == t.step && multiplier > 1 -> t.step * multiplier
-                        else -> t.curr + (t.step * multiplier)
-                    }
-                    t.curr = newCurr.coerceAtMost(t.max)
-                }
-            }
+        applyLaunchLogic(json)
+        
+        contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
+            OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
         }
 
-        updateTopInputUI()
-
-        if (selectedItems.isEmpty()) {
+        loadUIFromConfig()
+        
+        val titles = json.optJSONArray("titles")
+        if (titles == null || titles.length() == 0) {
             Toast.makeText(this, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, getString(R.string.files_found_count, selectedItems.size), Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.files_found_count, titles.length()), Toast.LENGTH_SHORT).show()
         }
-
-        val folder = getFolderDocumentFile() ?: return
-        saveToConfig(folder, adapter.currentList, selectedItems)
     }
 
     private fun formatFileSize(size: Long): String {
@@ -305,6 +349,7 @@ class SettingsActivity : AppCompatActivity() {
         TimePickerDialog(this, { _, h, m ->
             val timeStr = String.format(Locale.US, "%02d:%02d", h, m)
             tvSetTime.text = timeStr
+            lastAutoLaunchTs = 0L
             getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
         }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show()
     }
@@ -332,13 +377,18 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val json = readConfigJson(configFile) ?: return
             
-            // Загрузка состояния секундомера из файла
             if (json.has("stopwatch_enabled")) {
                 cbStopwatch.isChecked = json.getBoolean("stopwatch_enabled")
             }
             
-            // Загрузка времени тренировки
-            tvSetTime.text = json.optString("training_time", getString(R.string.time_default))
+            val trainingTimeJson = json.opt("training_time")
+            if (trainingTimeJson is JSONObject) {
+                tvSetTime.text = trainingTimeJson.optString("value", getString(R.string.time_default))
+                lastAutoLaunchTs = trainingTimeJson.optLong("last_auto_launch_ts", 0L)
+            } else {
+                tvSetTime.text = json.optString("training_time", getString(R.string.time_default))
+                lastAutoLaunchTs = 0L
+            }
 
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
@@ -378,6 +428,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             adapter.submitList(items)
             updateTopInputUI()
+            
         } catch (e: Exception) { Log.e(TAG, "Ошибка загрузки", e) }
     }
 
@@ -392,7 +443,6 @@ class SettingsActivity : AppCompatActivity() {
             updatedItems.add(VideoItem(id = UUID.randomUUID().toString(), fileName = file.name ?: "", fileSizeRaw = file.length()))
         }
 
-        // Поправка: Сначала активированные (зеленые), затем по Сеанс - № Упражнения - № Файла
         val sortedItems = updatedItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }
             .thenBy { it.sessionNum.toIntOrNull() ?: Int.MAX_VALUE }
             .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
@@ -410,7 +460,6 @@ class SettingsActivity : AppCompatActivity() {
             val configFile = findOrCreateConfigFile(folder) ?: return
             val json = readConfigJson(configFile) ?: JSONObject()
             
-            // Сохранение параметра секундомера
             json.put("stopwatch_enabled", cbStopwatch.isChecked)
             
             val array = JSONArray()
@@ -427,7 +476,12 @@ class SettingsActivity : AppCompatActivity() {
             resetState.forEach { (k, v) -> resetObj.put(k, v) }
             json.put("reset_state", resetObj)
 
-            json.put("training_time", tvSetTime.text.toString())
+            val trainingTimeObj = JSONObject().apply {
+                put("value", tvSetTime.text.toString())
+                put("last_auto_launch_ts", lastAutoLaunchTs)
+            }
+            json.put("training_time", trainingTimeObj)
+            
             json.put("folder_path", selectedFolderPathTextView.text.toString())
             
             val hObj = JSONObject().apply {
