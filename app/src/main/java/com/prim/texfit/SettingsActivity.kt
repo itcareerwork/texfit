@@ -56,8 +56,6 @@ class SettingsActivity : AppCompatActivity() {
     companion object {
         private const val PREFS_NAME = "TexfitPrefs"
         private const val SELECTED_FOLDER_URI_KEY = "selectedFolderUri"
-        private const val SELECTED_TIME_KEY = "selectedTime"
-        private const val STOPWATCH_ENABLED_KEY = "stopwatch_enabled_pref"
         private const val TAG = "SettingsActivity"
         private const val CONFIG_FILE_NAME = "texfit.cfg"
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
@@ -145,16 +143,12 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.btn_add_folder).setOnClickListener { showAddMenu(it) }
         tvSetTime.setOnClickListener { showTimePicker() }
 
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        cbStopwatch.isChecked = prefs.getBoolean(STOPWATCH_ENABLED_KEY, false)
         cbStopwatch.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(STOPWATCH_ENABLED_KEY, isChecked).apply()
-            // Сохраняем в файл при изменении (Requirement 1.2.4)
+            // Сохраняем в файл при изменении
             getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
         }
 
         loadAndDisplaySelectedFolder()
-        loadSelectedTime()
         loadUIFromConfig()
     }
 
@@ -311,7 +305,6 @@ class SettingsActivity : AppCompatActivity() {
         TimePickerDialog(this, { _, h, m ->
             val timeStr = String.format(Locale.US, "%02d:%02d", h, m)
             tvSetTime.text = timeStr
-            saveSelectedTime(timeStr)
             getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
         }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show()
     }
@@ -320,17 +313,6 @@ class SettingsActivity : AppCompatActivity() {
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
             putString(SELECTED_FOLDER_URI_KEY, uri.toString())
         }
-    }
-
-    private fun saveSelectedTime(time: String) {
-        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
-            putString(SELECTED_TIME_KEY, time)
-        }
-    }
-
-    private fun loadSelectedTime() {
-        tvSetTime.text = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(SELECTED_TIME_KEY, getString(R.string.time_default))
     }
 
     private fun loadAndDisplaySelectedFolder() { getFolderUri()?.let { displaySelectedFolder(it) } }
@@ -350,14 +332,13 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val json = readConfigJson(configFile) ?: return
             
-            // Загрузка состояния секундомера из файла (Requirement 1.2.4)
+            // Загрузка состояния секундомера из файла
             if (json.has("stopwatch_enabled")) {
-                val isSwEnabled = json.getBoolean("stopwatch_enabled")
-                cbStopwatch.isChecked = isSwEnabled
-                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
-                    putBoolean(STOPWATCH_ENABLED_KEY, isSwEnabled)
-                }
+                cbStopwatch.isChecked = json.getBoolean("stopwatch_enabled")
             }
+            
+            // Загрузка времени тренировки
+            tvSetTime.text = json.optString("training_time", getString(R.string.time_default))
 
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
@@ -427,49 +408,47 @@ class SettingsActivity : AppCompatActivity() {
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>, selectedItems: List<VideoItem>? = null) {
         try {
             val configFile = findOrCreateConfigFile(folder) ?: return
-            val existingJson = readConfigJson(configFile) ?: JSONObject()
+            val json = readConfigJson(configFile) ?: JSONObject()
             
-            val json = JSONObject().apply {
-                // Сохранение параметра секундомера (Requirement 1.2.4)
-                put("stopwatch_enabled", cbStopwatch.isChecked)
-                
-                val array = JSONArray()
-                items.forEach { array.put(it.toJson(sessionOptions, exerciseOptions)) }
-                put("video_items", array)
-                put("session_options", JSONArray(sessionOptions))
-                put("exercise_options", JSONArray(exerciseOptions))
-                
-                val stateObj = JSONObject()
-                categoryState.forEach { (k, v) -> stateObj.put(k, v) }
-                put("category_state", stateObj)
-                
-                val resetObj = JSONObject()
-                resetState.forEach { (k, v) -> resetObj.put(k, v) }
-                put("reset_state", resetObj)
+            // Сохранение параметра секундомера
+            json.put("stopwatch_enabled", cbStopwatch.isChecked)
+            
+            val array = JSONArray()
+            items.forEach { array.put(it.toJson(sessionOptions, exerciseOptions)) }
+            json.put("video_items", array)
+            json.put("session_options", JSONArray(sessionOptions))
+            json.put("exercise_options", JSONArray(exerciseOptions))
+            
+            val stateObj = JSONObject()
+            categoryState.forEach { (k, v) -> stateObj.put(k, v) }
+            json.put("category_state", stateObj)
+            
+            val resetObj = JSONObject()
+            resetState.forEach { (k, v) -> resetObj.put(k, v) }
+            json.put("reset_state", resetObj)
 
-                put("training_time", tvSetTime.text.toString())
-                put("folder_path", selectedFolderPathTextView.text.toString())
-                val hObj = JSONObject().apply {
-                    put("col", hColor.text.toString()); put("cat1", hCat1.text.toString())
-                    put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString())
-                    put("size", hColor.text.toString()); put("note", hNote.text.toString())
-                }
-                put("headers", hObj)
-                
-                if (selectedItems != null) {
-                    val titlesArray = JSONArray()
-                    selectedItems.forEach { selected ->
-                        val entry = JSONArray()
-                        entry.put(selected.id) 
-                        entry.put(0) // status
-                        entry.put(0) // last playback position (ms)
-                        titlesArray.put(entry)
-                    }
-                    put("titles", titlesArray)
-                } else {
-                    if (existingJson.has("titles")) put("titles", existingJson.getJSONArray("titles"))
-                }
+            json.put("training_time", tvSetTime.text.toString())
+            json.put("folder_path", selectedFolderPathTextView.text.toString())
+            
+            val hObj = JSONObject().apply {
+                put("col", hColor.text.toString()); put("cat1", hCat1.text.toString())
+                put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString())
+                put("size", hSize.text.toString()); put("note", hNote.text.toString())
             }
+            json.put("headers", hObj)
+            
+            if (selectedItems != null) {
+                val titlesArray = JSONArray()
+                selectedItems.forEach { selected ->
+                    val entry = JSONArray()
+                    entry.put(selected.id) 
+                    entry.put(0) // status
+                    entry.put(0) // last playback position (ms)
+                    titlesArray.put(entry)
+                }
+                json.put("titles", titlesArray)
+            }
+            
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
                 OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
             }
