@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.net.Uri
@@ -20,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ArrayAdapter
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -55,6 +57,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val PREFS_NAME = "TexfitPrefs"
         private const val SELECTED_FOLDER_URI_KEY = "selectedFolderUri"
         private const val SELECTED_TIME_KEY = "selectedTime"
+        private const val STOPWATCH_ENABLED_KEY = "stopwatch_enabled_pref"
         private const val TAG = "SettingsActivity"
         private const val CONFIG_FILE_NAME = "texfit.cfg"
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
@@ -65,6 +68,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var adapter: VideoListAdapter
     private lateinit var tvSetTime: TextView
     private lateinit var etTopInput: EditText
+    private lateinit var cbStopwatch: CheckBox
     
     private lateinit var hColor: TextView
     private lateinit var hCat1: TextView
@@ -117,6 +121,11 @@ class SettingsActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.mp4_files_recycler_view)
         tvSetTime = findViewById(R.id.tv_set_time)
         etTopInput = findViewById(R.id.et_top_input)
+        cbStopwatch = findViewById(R.id.cb_stopwatch_enabled)
+        
+        // Цвет чебокса зеленый (Task 1)
+        val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
+        cbStopwatch.buttonTintList = ColorStateList.valueOf(greenColor)
         
         hColor = findViewById(R.id.header_color)
         hCat1 = findViewById(R.id.header_cat1)
@@ -135,6 +144,14 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.btn_add_folder).setOnClickListener { showAddMenu(it) }
         tvSetTime.setOnClickListener { showTimePicker() }
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        cbStopwatch.isChecked = prefs.getBoolean(STOPWATCH_ENABLED_KEY, false)
+        cbStopwatch.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(STOPWATCH_ENABLED_KEY, isChecked).apply()
+            // Сохраняем в файл при изменении (Requirement 1.2.4)
+            getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
+        }
 
         loadAndDisplaySelectedFolder()
         loadSelectedTime()
@@ -295,6 +312,7 @@ class SettingsActivity : AppCompatActivity() {
             val timeStr = String.format(Locale.US, "%02d:%02d", h, m)
             tvSetTime.text = timeStr
             saveSelectedTime(timeStr)
+            getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
         }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show()
     }
 
@@ -331,6 +349,16 @@ class SettingsActivity : AppCompatActivity() {
         
         try {
             val json = readConfigJson(configFile) ?: return
+            
+            // Загрузка состояния секундомера из файла (Requirement 1.2.4)
+            if (json.has("stopwatch_enabled")) {
+                val isSwEnabled = json.getBoolean("stopwatch_enabled")
+                cbStopwatch.isChecked = isSwEnabled
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
+                    putBoolean(STOPWATCH_ENABLED_KEY, isSwEnabled)
+                }
+            }
+
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
                 hColor.text = headersJson.optString("col", "Цвет"); hCat1.text = headersJson.optString("cat1", "Сеанс")
@@ -393,6 +421,9 @@ class SettingsActivity : AppCompatActivity() {
             val existingJson = readConfigJson(configFile) ?: JSONObject()
             
             val json = JSONObject().apply {
+                // Сохранение параметра секундомера (Requirement 1.2.4)
+                put("stopwatch_enabled", cbStopwatch.isChecked)
+                
                 val array = JSONArray()
                 items.forEach { array.put(it.toJson(sessionOptions, exerciseOptions)) }
                 put("video_items", array)
@@ -455,7 +486,8 @@ class SettingsActivity : AppCompatActivity() {
         var curr: Long = 0L, 
         var step: Long = 0L, 
         var multType: Int = 0,
-        var multVal: Int = 1
+        var multVal: Int = 1,
+        var isEnabled: Boolean = true
     )
 
     data class VideoItem(
@@ -482,6 +514,7 @@ class SettingsActivity : AppCompatActivity() {
                 val tObj = JSONObject()
                 tObj.put("t", it.time); tObj.put("m", it.max); tObj.put("c", it.curr)
                 tObj.put("s", it.step); tObj.put("mt", it.multType); tObj.put("mv", it.multVal)
+                tObj.put("en", it.isEnabled)
                 tArr.put(tObj)
             }
             put("timings", tArr)
@@ -516,7 +549,8 @@ class SettingsActivity : AppCompatActivity() {
                             tObj.optLong("c", 0L),
                             tObj.optLong("s", 0L),
                             tObj.optInt("mt", 0),
-                            tObj.optInt("mv", 1)
+                            tObj.optInt("mv", 1),
+                            tObj.optBoolean("en", true)
                         ))
                     }
                 }

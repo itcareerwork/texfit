@@ -5,8 +5,8 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <VideoView
-        android:id="@+id/video_view"
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_centerInParent="true" />
@@ -18,6 +18,20 @@
         android:layout_above="@+id/seek_bar"
         android:clickable="true"
         android:focusable="true" />
+
+    <!-- Секундомер по центру видео (полупрозрачный) -->
+    <TextView
+        android:id="@+id/tv_center_stopwatch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:textColor="#40FFFFFF"
+        android:textSize="120sp"
+        android:textStyle="bold"
+        android:text="00:00"
+        android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false" />
 
     <!-- Счетчик упражнений с круговым таймером -->
     <FrameLayout
@@ -75,17 +89,18 @@
         android:splitTrack="false"
         android:progressDrawable="@android:drawable/progress_horizontal" />
 
-    <!-- Кнопки Назад / Вперед (разнесены от центра, расстояние 2/4 экрана) -->
+    <!-- Кнопки Назад / Секундомер / Вперед -->
     <LinearLayout
+        android:id="@+id/layout_bottom_controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="24dp"
         android:orientation="horizontal"
         android:gravity="center"
-        android:weightSum="4">
+        android:weightSum="5">
 
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
 
         <Button
             android:id="@+id/btn_prev"
@@ -94,7 +109,37 @@
             android:text="&lt;&lt;"
             android:alpha="0.5" />
 
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="2" />
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+
+        <!-- Новый секундомер внизу -->
+        <LinearLayout
+            android:id="@+id/layout_bottom_stopwatch"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+            
+            <TextView
+                android:id="@+id/tv_bottom_stopwatch_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:alpha="0.7" />
+                
+            <Button
+                android:id="@+id/btn_stopwatch_toggle"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="START"
+                android:textSize="10sp"
+                android:alpha="0.5"
+                android:padding="0dp" />
+        </LinearLayout>
+
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
         <Button
             android:id="@+id/btn_next"
@@ -103,10 +148,10 @@
             android:text="&gt;&gt;"
             android:alpha="0.5" />
 
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
     </LinearLayout>
 
-    <!-- Кнопка "Упражнения" (снизу слева) -->
+    <!-- Кнопка "Упражнения" -->
     <Button
         android:id="@+id/btn_exercise_menu"
         android:layout_width="wrap_content"
