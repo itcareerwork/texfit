@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
     }
 
-    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val debugInfo: String, val lastPos: Int)
+    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val displayName: String, val lastPos: Int)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
@@ -132,15 +132,6 @@ class MainActivity : AppCompatActivity() {
                 val titlesArray = json.optJSONArray("titles")
                 val videoItemsArray = json.optJSONArray("video_items")
                 
-                val sessionOptions = mutableListOf<String>()
-                json.optJSONArray("session_options")?.let { arr ->
-                    for (i in 0 until arr.length()) sessionOptions.add(arr.getString(i))
-                }
-                val exerciseOptions = mutableListOf<String>()
-                json.optJSONArray("exercise_options")?.let { arr ->
-                    for (i in 0 until arr.length()) exerciseOptions.add(arr.getString(i))
-                }
-
                 if (titlesArray == null || videoItemsArray == null) {
                     adapter.submitList(emptyList())
                     return
@@ -162,20 +153,11 @@ class MainActivity : AppCompatActivity() {
                     
                     val itemJson = videoItemsMap[id] ?: continue
                     val fileName = itemJson.optString("f_n")
-                    
-                    val sIdx = itemJson.optInt("s_idx", -1)
-                    val eIdx = itemJson.optInt("e_idx", -1)
-                    val fullSession = if (sIdx in sessionOptions.indices) sessionOptions[sIdx] else ""
-                    val sessionName = fullSession.substringAfter(" ", "")
-                    val exerciseName = if (eIdx in exerciseOptions.indices) exerciseOptions[eIdx] else ""
-                    val numExercise = itemJson.optString("n_e")
-                    val numFile = itemJson.optString("n_f")
-                    
-                    val debugStr = "|$sessionName|$numExercise $exerciseName|$numFile|"
+                    val displayName = itemJson.optString("c_n")
 
                     if (fileName.isNotEmpty()) {
                         folder.findFile(fileName)?.uri?.let { uri ->
-                            playlist.add(PlaylistItem(id, uri, status == 1, debugStr, lastPos))
+                            playlist.add(PlaylistItem(id, uri, status == 1, displayName, lastPos))
                         }
                     }
                 }
@@ -253,7 +235,7 @@ class MainActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = getItem(position)
             
-            holder.tvDebug.text = item.debugInfo
+            holder.tvDisplayName.text = item.displayName
             
             try {
                 val bitmap: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -296,7 +278,7 @@ class MainActivity : AppCompatActivity() {
         inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             val imageView: ImageView = itemView.findViewById(R.id.iv_thumbnail)
             val ivCheck: ImageView = itemView.findViewById(R.id.iv_watched_check)
-            val tvDebug: TextView = itemView.findViewById(R.id.tv_debug_info)
+            val tvDisplayName: TextView = itemView.findViewById(R.id.tv_debug_info)
         }
     }
 
