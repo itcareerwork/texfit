@@ -22,8 +22,8 @@
     <!-- Счетчик упражнений с круговым таймером (верхний правый) -->
     <FrameLayout
         android:id="@+id/layout_counter_container"
-        android:layout_width="80dp"
-        android:layout_height="80dp"
+        android:layout_width="110dp"
+        android:layout_height="110dp"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
         android:layout_marginTop="16dp"
@@ -37,7 +37,7 @@
             android:layout_gravity="center"
             app:indicatorColor="#FFEB3B"
             app:trackColor="#40FFFFFF"
-            app:indicatorSize="70dp"
+            app:indicatorSize="100dp"
             app:trackThickness="4dp" />
 
         <TextView
