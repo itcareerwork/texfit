@@ -452,7 +452,7 @@ class SettingsActivity : AppCompatActivity() {
                 val hObj = JSONObject().apply {
                     put("col", hColor.text.toString()); put("cat1", hCat1.text.toString())
                     put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString())
-                    put("size", hSize.text.toString()); put("note", hNote.text.toString())
+                    put("size", hColor.text.toString()); put("note", hNote.text.toString())
                 }
                 put("headers", hObj)
                 
@@ -496,7 +496,7 @@ class SettingsActivity : AppCompatActivity() {
         var step: Long = 0L, 
         var multType: Int = 0,
         var multVal: Int = 1,
-        var isEnabled: Boolean = true
+        var isEnabled: Boolean = false
     )
 
     data class VideoItem(
@@ -562,7 +562,7 @@ class SettingsActivity : AppCompatActivity() {
                             tObj.optLong("s", 0L),
                             tObj.optInt("mt", 0),
                             tObj.optInt("mv", 1),
-                            tObj.optBoolean("en", true)
+                            tObj.optBoolean("en", false)
                         ))
                     }
                 }

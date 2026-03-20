@@ -53,7 +53,6 @@ class VideoPlayerActivity : Activity() {
     private lateinit var btnExerciseMenu: Button
     private lateinit var tvTime: TextView
     private lateinit var tvExerciseCounter: TextView
-    private lateinit var tvCenterStopwatch: TextView
     private lateinit var circularTimer: CircularProgressIndicator
     private lateinit var layoutTicks: FrameLayout
     private lateinit var layoutCounterContainer: View
@@ -142,7 +141,6 @@ class VideoPlayerActivity : Activity() {
         btnExerciseMenu = findViewById(R.id.btn_exercise_menu)
         tvTime = findViewById(R.id.tv_time)
         tvExerciseCounter = findViewById(R.id.tv_exercise_counter)
-        tvCenterStopwatch = findViewById(R.id.tv_center_stopwatch)
         circularTimer = findViewById(R.id.circular_timer)
         layoutTicks = findViewById(R.id.layout_ticks)
         layoutCounterContainer = findViewById(R.id.layout_counter_container)
@@ -482,7 +480,7 @@ class VideoPlayerActivity : Activity() {
     private fun addDefaultTimings(duration: Int) {
         var changed = false
         if (timings.none { it.time == 0 }) {
-            timings.add(SettingsActivity.Timing(0, 0, 0, 0, 1, 1, true))
+            timings.add(SettingsActivity.Timing(0, 0, 0, 0, 1, 1, false))
             changed = true
         }
 
@@ -538,11 +536,15 @@ class VideoPlayerActivity : Activity() {
         }
 
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
-        val colorStateList = ColorStateList.valueOf(greenColor)
+        val grayColor = Color.GRAY
+        val colorStateList = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(greenColor, grayColor)
+        )
 
         val switchExercise = Switch(this).apply {
-            text = "Упражнение на этом отрезке"
-            isChecked = targetTiming?.isEnabled ?: true
+            text = "Включить"
+            isChecked = targetTiming?.isEnabled ?: false
             setPadding(0, 0, 0, 20)
             thumbTintList = colorStateList
             trackTintList = colorStateList
