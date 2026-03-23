@@ -220,13 +220,6 @@
                     android:insetLeft="0dp"
                     android:insetRight="0dp" />
 
-                <CheckBox
-                    android:id="@+id/cb_stopwatch_enabled"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:text="ВКЛ/ВЫКЛ секундомер"
-                    android:textSize="12sp" />
             </LinearLayout>
 
             <TextView

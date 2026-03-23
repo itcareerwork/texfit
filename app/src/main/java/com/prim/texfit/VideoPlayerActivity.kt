@@ -158,6 +158,7 @@ class VideoPlayerActivity : Activity() {
         videoItemId = intent.getStringExtra("video_item_id") ?: ""
         itemIndexInPlaylist = intent.getIntExtra("item_index", -1)
         isFromSettings = intent.getBooleanExtra("is_from_settings", false)
+        isStopwatchVisible = isFromSettings
         val lastPos = intent.getIntExtra("last_pos", 0)
 
         if (videoUri != null) {
@@ -782,10 +783,6 @@ class VideoPlayerActivity : Activity() {
             val configFile = folder.findFile("texfit.cfg") ?: return
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 val json = JSONObject(inputStream.bufferedReader().readText())
-
-                if (json.has("stopwatch_enabled")) {
-                    isStopwatchVisible = json.getBoolean("stopwatch_enabled")
-                }
 
                 val videoItems = json.optJSONArray("video_items") ?: return
                 for (i in 0 until videoItems.length()) {

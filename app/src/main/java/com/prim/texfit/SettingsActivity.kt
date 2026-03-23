@@ -177,7 +177,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var adapter: VideoListAdapter
     private lateinit var tvSetTime: TextView
     private lateinit var etTopInput: EditText
-    private lateinit var cbStopwatch: CheckBox
     private lateinit var btnLaunch: Button
     
     private lateinit var hColor: TextView
@@ -233,11 +232,7 @@ class SettingsActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.mp4_files_recycler_view)
         tvSetTime = findViewById(R.id.tv_set_time)
         etTopInput = findViewById(R.id.et_top_input)
-        cbStopwatch = findViewById(R.id.cb_stopwatch_enabled)
         btnLaunch = findViewById(R.id.btn_launch)
-        
-        val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
-        cbStopwatch.buttonTintList = ColorStateList.valueOf(greenColor)
         
         hColor = findViewById(R.id.header_color)
         hCat1 = findViewById(R.id.header_cat1)
@@ -256,10 +251,6 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.btn_add_folder).setOnClickListener { showAddMenu(it) }
         tvSetTime.setOnClickListener { showTimePicker() }
-
-        cbStopwatch.setOnCheckedChangeListener { _, isChecked ->
-            getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
-        }
 
         loadAndDisplaySelectedFolder()
         loadUIFromConfig()
@@ -380,10 +371,6 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val json = readConfigJson(configFile) ?: return
             
-            if (json.has("stopwatch_enabled")) {
-                cbStopwatch.isChecked = json.getBoolean("stopwatch_enabled")
-            }
-
             if (json.has("button")) {
                 val showButton = json.optInt("button", 0) == 1
                 btnLaunch.visibility = if (showButton) View.VISIBLE else View.GONE
@@ -469,8 +456,6 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val configFile = findOrCreateConfigFile(folder) ?: return
             val json = readConfigJson(configFile) ?: JSONObject()
-            
-            json.put("stopwatch_enabled", cbStopwatch.isChecked)
             
             if (!json.has("button")) {
                 json.put("button", 0)
