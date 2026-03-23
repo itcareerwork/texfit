@@ -56,6 +56,7 @@ class VideoPlayerActivity : Activity() {
     private lateinit var circularTimer: CircularProgressIndicator
     private lateinit var layoutTicks: FrameLayout
     private lateinit var layoutCounterContainer: View
+    private lateinit var layoutStickContainer: FrameLayout
     private lateinit var layoutPauseInfo: View
     private lateinit var clickInterceptor: View
 
@@ -144,6 +145,7 @@ class VideoPlayerActivity : Activity() {
         circularTimer = findViewById(R.id.circular_timer)
         layoutTicks = findViewById(R.id.layout_ticks)
         layoutCounterContainer = findViewById(R.id.layout_counter_container)
+        layoutStickContainer = findViewById(R.id.layout_stick_container)
         layoutPauseInfo = findViewById(R.id.layout_pause_info)
         clickInterceptor = findViewById(R.id.click_interceptor)
 
@@ -420,6 +422,7 @@ class VideoPlayerActivity : Activity() {
             }
             tvExerciseCounter.text = formatTime(0)
             circularTimer.progress = 0
+            layoutStickContainer.visibility = View.GONE
             lastVideoPos = pos
             lastTickRealtime = SystemClock.elapsedRealtime()
             return
@@ -437,6 +440,17 @@ class VideoPlayerActivity : Activity() {
         val remainingMs = (currMs - segmentPlayedMs).coerceAtLeast(0L)
         tvExerciseCounter.text = formatTime(remainingMs.toInt())
         circularTimer.progress = ((remainingMs.toFloat() / currMs.toFloat()) * 100f).toInt().coerceIn(0, 100)
+
+        // Вращение риски (палочки)
+        val stepMs = currentTiming.step.coerceAtLeast(0L)
+        if (stepMs > 0) {
+            // Инвертируем направление (против часовой стрелки), чтобы совпадало с убывающим индикатором
+            val rotationAngle = -((segmentPlayedMs % stepMs).toFloat() / stepMs.toFloat()) * 360f
+            layoutStickContainer.rotation = rotationAngle
+            layoutStickContainer.visibility = View.VISIBLE
+        } else {
+            layoutStickContainer.visibility = View.GONE
+        }
 
         // Переход на следующий сегмент по завершении упражнения
         if (segmentPlayedMs >= currMs) {

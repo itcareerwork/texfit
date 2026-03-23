@@ -40,6 +40,21 @@
             app:indicatorSize="100dp"
             app:trackThickness="4dp" />
 
+        <!-- Контейнер для риски (палочки), которая делает оборот за время шага -->
+        <FrameLayout
+            android:id="@+id/layout_stick_container"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:layout_gravity="center">
+
+            <View
+                android:id="@+id/circular_stick"
+                android:layout_width="3dp"
+                android:layout_height="10dp"
+                android:layout_gravity="center_horizontal|top"
+                android:background="#A0A0A0" />
+        </FrameLayout>
+
         <TextView
             android:id="@+id/tv_exercise_counter"
             android:layout_width="wrap_content"
