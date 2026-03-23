@@ -21,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageButton
@@ -177,6 +178,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvSetTime: TextView
     private lateinit var etTopInput: EditText
     private lateinit var cbStopwatch: CheckBox
+    private lateinit var btnLaunch: Button
     
     private lateinit var hColor: TextView
     private lateinit var hCat1: TextView
@@ -232,6 +234,7 @@ class SettingsActivity : AppCompatActivity() {
         tvSetTime = findViewById(R.id.tv_set_time)
         etTopInput = findViewById(R.id.et_top_input)
         cbStopwatch = findViewById(R.id.cb_stopwatch_enabled)
+        btnLaunch = findViewById(R.id.btn_launch)
         
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
         cbStopwatch.buttonTintList = ColorStateList.valueOf(greenColor)
@@ -243,7 +246,7 @@ class SettingsActivity : AppCompatActivity() {
         hSize = findViewById(R.id.header_size)
         hNote = findViewById(R.id.header_note)
 
-        findViewById<View>(R.id.btn_launch).setOnClickListener { 
+        btnLaunch.setOnClickListener { 
             performLaunchStep()
         }
 
@@ -380,6 +383,13 @@ class SettingsActivity : AppCompatActivity() {
             if (json.has("stopwatch_enabled")) {
                 cbStopwatch.isChecked = json.getBoolean("stopwatch_enabled")
             }
+
+            if (json.has("button")) {
+                val showButton = json.optInt("button", 0) == 1
+                btnLaunch.visibility = if (showButton) View.VISIBLE else View.GONE
+            } else {
+                btnLaunch.visibility = View.GONE
+            }
             
             val trainingTimeJson = json.opt("training_time")
             if (trainingTimeJson is JSONObject) {
@@ -461,6 +471,10 @@ class SettingsActivity : AppCompatActivity() {
             val json = readConfigJson(configFile) ?: JSONObject()
             
             json.put("stopwatch_enabled", cbStopwatch.isChecked)
+            
+            if (!json.has("button")) {
+                json.put("button", 0)
+            }
             
             val array = JSONArray()
             items.forEach { array.put(it.toJson(sessionOptions, exerciseOptions)) }
