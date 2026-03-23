@@ -68,6 +68,7 @@ class VideoPlayerActivity : Activity() {
     private var videoFileName: String = ""
     private var fileNumForDisplay: String = "000"
     private var itemIndexInPlaylist: Int = -1
+    private var isFromSettings: Boolean = false
     private var timings = mutableListOf<SettingsActivity.Timing>()
 
     private var activeTiming: SettingsActivity.Timing? = null
@@ -156,6 +157,7 @@ class VideoPlayerActivity : Activity() {
         val videoUri = intent.getParcelableExtra<Uri>("video_uri")
         videoItemId = intent.getStringExtra("video_item_id") ?: ""
         itemIndexInPlaylist = intent.getIntExtra("item_index", -1)
+        isFromSettings = intent.getBooleanExtra("is_from_settings", false)
         val lastPos = intent.getIntExtra("last_pos", 0)
 
         if (videoUri != null) {
@@ -753,7 +755,7 @@ class VideoPlayerActivity : Activity() {
     }
 
     private fun saveCurrentPositionToConfig(pos: Int) {
-        if (itemIndexInPlaylist == -1) return
+        if (itemIndexInPlaylist == -1 || isFromSettings) return
         try {
             val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
@@ -845,7 +847,7 @@ class VideoPlayerActivity : Activity() {
         val visibility = if (show) View.VISIBLE else View.GONE
         layoutPauseInfo.visibility = visibility
         btnStop.visibility = visibility
-        btnExerciseMenu.visibility = visibility
+        btnExerciseMenu.visibility = if (show && isFromSettings) View.VISIBLE else View.GONE
     }
 
     private fun updateTimeDisplay() {

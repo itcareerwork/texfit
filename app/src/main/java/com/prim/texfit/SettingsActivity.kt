@@ -651,7 +651,24 @@ class SettingsActivity : AppCompatActivity() {
                     if (getItem(pos).exerciseName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_exercise_first), Toast.LENGTH_SHORT).show() 
                     else showFileNumPopup(pos) 
                 }
-                fN.setOnClickListener { showFileNameEditDialog(pos) }
+                fN.setOnClickListener {
+                    val currentItem = getItem(pos)
+                    val folder = getFolderDocumentFile()
+                    val file = folder?.findFile(currentItem.fileName)
+                    if (file != null) {
+                        val intent = Intent(this@SettingsActivity, VideoPlayerActivity::class.java)
+                        intent.putExtra("video_uri", file.uri)
+                        intent.putExtra("video_item_id", currentItem.id)
+                        intent.putExtra("is_from_settings", true)
+                        startActivity(intent)
+                    } else {
+                        Toast.makeText(this@SettingsActivity, getString(R.string.files_not_found), Toast.LENGTH_SHORT).show()
+                    }
+                }
+                fN.setOnLongClickListener { 
+                    showFileNameEditDialog(pos)
+                    true
+                }
                 note.setOnClickListener { showNoteEditDialog(pos) }
             }
 
