@@ -12,23 +12,19 @@ import android.os.Looper
 import android.os.SystemClock
 import android.text.InputType
 import android.util.Log
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupMenu
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.SeekBar
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.media3.common.C
@@ -50,7 +46,6 @@ class VideoPlayerActivity : Activity() {
     private lateinit var btnStop: Button
     private lateinit var btnPrev: Button
     private lateinit var btnNext: Button
-    private lateinit var btnExerciseMenu: Button
     private lateinit var tvTime: TextView
     private lateinit var tvExerciseCounter: TextView
     private lateinit var circularTimer: CircularProgressIndicator
@@ -64,12 +59,31 @@ class VideoPlayerActivity : Activity() {
     private lateinit var tvBottomStopwatchTime: TextView
     private lateinit var btnStopwatchToggle: Button
 
+    // Элементы управления упражнением на экране
+    private lateinit var layoutExerciseControls: View
+    private lateinit var tvControlSegmentLabel: TextView
+    private lateinit var swExerciseEnabled: SwitchCompat
+    private lateinit var layoutSettingsFields: View
+    private lateinit var tvControlMax: TextView
+    private lateinit var tvControlStep: TextView
+    private lateinit var tvControlMult: TextView
+    private lateinit var btnControlSave: Button
+    private lateinit var btnControlDelete: Button
+    private lateinit var btnControlClearAll: Button
+
     private var videoItemId: String = ""
     private var videoFileName: String = ""
     private var fileNumForDisplay: String = "000"
     private var itemIndexInPlaylist: Int = -1
     private var isFromSettings: Boolean = false
     private var timings = mutableListOf<SettingsActivity.Timing>()
+
+    // Промежуточные переменные для хранения изменений до сохранения
+    private var pendingEnabled: Boolean = false
+    private var pendingMax: Long = 0L
+    private var pendingStep: Long = 0L
+    private var pendingMultType: Int = 0
+    private var pendingMultVal: Int = 1
 
     private var activeTiming: SettingsActivity.Timing? = null
     private var isSeeking: Boolean = false
@@ -84,7 +98,6 @@ class VideoPlayerActivity : Activity() {
     private var lastIssuedSeekRealtime: Long = 0L
     private var userSeekAnchorPos: Int? = null
 
-    private var isExerciseMode: Boolean = true
     private var isStopwatchVisible: Boolean = false
     private var stopwatchBaseTime: Long = 0L
     private var stopwatchRunning: Boolean = false
@@ -140,7 +153,6 @@ class VideoPlayerActivity : Activity() {
         btnStop = findViewById(R.id.btn_stop)
         btnPrev = findViewById(R.id.btn_prev)
         btnNext = findViewById(R.id.btn_next)
-        btnExerciseMenu = findViewById(R.id.btn_exercise_menu)
         tvTime = findViewById(R.id.tv_time)
         tvExerciseCounter = findViewById(R.id.tv_exercise_counter)
         circularTimer = findViewById(R.id.circular_timer)
@@ -154,6 +166,28 @@ class VideoPlayerActivity : Activity() {
         tvBottomStopwatchTime = findViewById(R.id.tv_bottom_stopwatch_time)
         btnStopwatchToggle = findViewById(R.id.btn_stopwatch_toggle)
 
+        // Инициализация элементов управления
+        layoutExerciseControls = findViewById(R.id.layout_exercise_controls)
+        tvControlSegmentLabel = findViewById(R.id.tv_control_segment_label)
+        swExerciseEnabled = findViewById(R.id.sw_exercise_enabled)
+        layoutSettingsFields = findViewById(R.id.layout_settings_fields)
+        tvControlMax = findViewById(R.id.tv_control_max)
+        tvControlStep = findViewById(R.id.tv_control_step)
+        tvControlMult = findViewById(R.id.tv_control_mult)
+        btnControlSave = findViewById(R.id.btn_control_save)
+        btnControlDelete = findViewById(R.id.btn_control_delete)
+        btnControlClearAll = findViewById(R.id.btn_control_clear_all)
+
+        // Возвращаем цвета переключателя
+        val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
+        val grayColor = Color.GRAY
+        val colorStateList = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(greenColor, grayColor)
+        )
+        swExerciseEnabled.thumbTintList = colorStateList
+        swExerciseEnabled.trackTintList = colorStateList
+
         val videoUri = intent.getParcelableExtra<Uri>("video_uri")
         videoItemId = intent.getStringExtra("video_item_id") ?: ""
         itemIndexInPlaylist = intent.getIntExtra("item_index", -1)
@@ -164,6 +198,7 @@ class VideoPlayerActivity : Activity() {
         if (videoUri != null) {
             loadTimingsFromConfig()
             setupStopwatch()
+            setupExerciseControls()
 
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
@@ -241,6 +276,7 @@ class VideoPlayerActivity : Activity() {
             }
             resetTaskTimer()
             updateUIState()
+            updateExerciseControlsUI()
         }
 
         btnNext.setOnClickListener {
@@ -249,15 +285,13 @@ class VideoPlayerActivity : Activity() {
             if (nextTiming != null) {
                 beginSeek(clampSeekTarget(nextTiming.time + 10))
             } else {
-                // Если мы на последнем сегменте, завершаем видео
                 saveCurrentPositionToConfig(0)
                 finish()
             }
             resetTaskTimer()
             updateUIState()
+            updateExerciseControlsUI()
         }
-
-        btnExerciseMenu.setOnClickListener { showExerciseDialog() }
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -266,6 +300,7 @@ class VideoPlayerActivity : Activity() {
                     beginSeek(progress)
                     resetTaskTimer()
                     updateUIState()
+                    updateExerciseControlsUI()
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) { isSeeking = true }
@@ -292,6 +327,161 @@ class VideoPlayerActivity : Activity() {
             }
             true
         }
+    }
+
+    private fun setupExerciseControls() {
+        if (!isFromSettings) return
+
+        swExerciseEnabled.setOnCheckedChangeListener { _, isChecked ->
+            pendingEnabled = isChecked
+            updateExerciseControlsVisibility(isChecked, pendingMax > 0)
+        }
+
+        tvControlMax.setOnClickListener {
+            showMmSsInput(pendingMax, "ЛИМИТ (MAX):") { newMs ->
+                pendingMax = newMs
+                tvControlMax.text = formatTime(newMs.toInt())
+                updateExerciseControlsVisibility(pendingEnabled, newMs > 0)
+            }
+        }
+
+        tvControlStep.setOnClickListener {
+            showMmSsInput(pendingStep, "ШАГ ПРИБАВКИ:") { newMs ->
+                pendingStep = newMs
+                tvControlStep.text = formatTime(newMs.toInt())
+            }
+        }
+
+        tvControlMult.setOnClickListener { v ->
+            if (pendingMax <= 0L) {
+                Toast.makeText(this, "Сначала задайте MAX", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val pop = PopupMenu(this, v)
+            pop.menu.add("Пусто"); pop.menu.add("№ файла $fileNumForDisplay")
+            val subMenu = pop.menu.addSubMenu("1-10")
+            for (i in 1..10) subMenu.add("x$i")
+            pop.setOnMenuItemClickListener { item ->
+                val title = item.title.toString()
+                when {
+                    title == "Пусто" -> { pendingMultType = 0; pendingMultVal = 1; tvControlMult.text = "Пусто" }
+                    title.startsWith("№ файла") -> { pendingMultType = 2; pendingMultVal = 1; tvControlMult.text = "№ файла $fileNumForDisplay" }
+                    title.startsWith("x") -> {
+                        pendingMultType = 1
+                        pendingMultVal = if (title.length > 1) title.substring(1).toInt() else 1
+                        tvControlMult.text = "x$pendingMultVal"
+                    }
+                }
+                true
+            }
+            pop.show()
+        }
+
+        btnControlSave.setOnClickListener {
+            val pos = player.currentPosition.toInt()
+            val target = findOrAddTiming(pos)
+            target.isEnabled = pendingEnabled
+            target.max = pendingMax
+            target.step = pendingStep
+            target.multType = pendingMultType
+            target.multVal = pendingMultVal
+            
+            saveTimingsToConfig()
+            drawTicks(player.duration.toInt())
+            resetTaskTimer()
+            updateUIState()
+            updateExerciseControlsUI()
+            Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
+        }
+
+        btnControlDelete.setOnClickListener {
+            val pos = player.currentPosition.toInt()
+            val sorted = timings.sortedBy { it.time }
+            val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
+            if (exactTiming != null && exactTiming.time != 0) {
+                timings.remove(exactTiming)
+                saveTimingsToConfig()
+                drawTicks(player.duration.toInt())
+                resetTaskTimer()
+                updateUIState()
+                updateExerciseControlsUI()
+            }
+        }
+
+        btnControlClearAll.setOnClickListener {
+            timings.clear()
+            addDefaultTimings(player.duration.toInt())
+            saveTimingsToConfig()
+            drawTicks(player.duration.toInt())
+            resetTaskTimer()
+            updateUIState()
+            updateExerciseControlsUI()
+            Toast.makeText(this, "Тайминги сброшены", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun findOrAddTiming(pos: Int): SettingsActivity.Timing {
+        val sorted = timings.sortedBy { it.time }
+        val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
+        if (exactTiming != null) return exactTiming
+        
+        val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
+        // При создании новой метки копируем настройки из предыдущей, но обнуляем прогресс (curr)
+        val newTiming = SettingsActivity.Timing(
+            pos, 
+            currentTiming?.max ?: 0L, 
+            0L, 
+            currentTiming?.step ?: 0L, 
+            currentTiming?.multType ?: 0, 
+            currentTiming?.multVal ?: 1, 
+            currentTiming?.isEnabled ?: false
+        )
+        timings.add(newTiming)
+        timings.sortBy { it.time }
+        return newTiming
+    }
+
+    private fun updateExerciseControlsUI() {
+        if (!isFromSettings || layoutExerciseControls.visibility != View.VISIBLE) return
+
+        val pos = player.currentPosition.toInt()
+        val sorted = timings.sortedBy { it.time }
+        val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time } ?: return
+        val nextTiming = sorted.filter { it.time > pos }.minByOrNull { it.time }
+        val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
+
+        val nextLabel = if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)
+        tvControlSegmentLabel.text = "${formatTime(currentTiming.time)} - $nextLabel"
+        
+        // Инициализируем промежуточные переменные из текущего тайминга
+        pendingEnabled = currentTiming.isEnabled
+        pendingMax = currentTiming.max
+        pendingStep = currentTiming.step
+        pendingMultType = currentTiming.multType
+        pendingMultVal = currentTiming.multVal
+
+        swExerciseEnabled.isChecked = pendingEnabled
+        tvControlMax.text = formatTime(pendingMax.toInt())
+        tvControlStep.text = formatTime(pendingStep.toInt())
+        tvControlMult.text = when(pendingMultType) {
+            1 -> "x$pendingMultVal"
+            2 -> "№ файла $fileNumForDisplay"
+            else -> "Пусто"
+        }
+        
+        updateExerciseControlsVisibility(pendingEnabled, pendingMax > 0)
+        btnControlDelete.visibility = if (currentTiming.time == 0) View.GONE else View.VISIBLE
+    }
+
+    private fun updateExerciseControlsVisibility(swOn: Boolean, maxOn: Boolean) {
+        tvControlMax.isEnabled = swOn
+        tvControlMax.alpha = if (swOn) 1f else 0.4f
+        
+        val stepMultEnabled = swOn && maxOn
+        tvControlStep.isEnabled = stepMultEnabled
+        tvControlStep.alpha = if (stepMultEnabled) 1f else 0.4f
+        tvControlMult.isEnabled = stepMultEnabled
+        tvControlMult.alpha = if (stepMultEnabled) 1f else 0.4f
     }
 
     override fun onBackPressed() {
@@ -321,7 +511,6 @@ class VideoPlayerActivity : Activity() {
         if (d != C.TIME_UNSET) {
             val pos = d.toInt()
             val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
-            // Если последний сегмент требует повтора
             if (currentTiming != null && currentTiming.isEnabled && currentTiming.max > 0L) {
                 val currMs = currentTiming.curr.coerceAtLeast(0L)
                 if (segmentPlayedMs < currMs) {
@@ -347,7 +536,6 @@ class VideoPlayerActivity : Activity() {
         val sorted = timings.sortedBy { it.time }
         val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time } ?: return
 
-        // 1.1.1: Обычный режим сегмента
         if (!currentTiming.isEnabled) {
             layoutCounterContainer.visibility = View.GONE
             activeTiming = null
@@ -364,7 +552,6 @@ class VideoPlayerActivity : Activity() {
         val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
         val segmentEnd = nextTiming?.time ?: totalDur
 
-        // 1.1.2: Пропуск сегмента при MAX = 0
         if (currentTiming.max <= 0L) {
             layoutCounterContainer.visibility = View.GONE
             if (isPlaying && !isSeeking) {
@@ -376,7 +563,6 @@ class VideoPlayerActivity : Activity() {
                         return
                     }
                 } else {
-                    // Последний сегмент - завершаем видео
                     clearActiveSegmentState()
                     saveCurrentPositionToConfig(0)
                     finish()
@@ -392,7 +578,6 @@ class VideoPlayerActivity : Activity() {
             return
         }
 
-        // Логика активного упражнения
         if (activeTimingTime != currentTiming.time) {
             activeTiming = currentTiming
             activeTimingTime = currentTiming.time
@@ -407,7 +592,6 @@ class VideoPlayerActivity : Activity() {
 
         val currMs = currentTiming.curr.coerceAtLeast(0L)
         if (currMs == 0L) {
-            // Пропуск если текущее значение упражнения = 0
             if (nextTiming != null && segmentEnd > segmentStart) {
                 if (isPlaying && !isSeeking) {
                     val target = clampSeekTarget(segmentEnd + 10)
@@ -417,7 +601,6 @@ class VideoPlayerActivity : Activity() {
                     }
                 }
             } else if (nextTiming == null) {
-                // Последний сегмент с curr=0
                 if (isPlaying && !isSeeking) {
                     saveCurrentPositionToConfig(0)
                     finish()
@@ -431,7 +614,6 @@ class VideoPlayerActivity : Activity() {
             return
         }
 
-        // Накопление времени воспроизведения
         val now = SystemClock.elapsedRealtime()
         if (isPlaying && !isSeeking) {
             val dt = now - lastTickRealtime
@@ -444,10 +626,8 @@ class VideoPlayerActivity : Activity() {
         tvExerciseCounter.text = formatTime(remainingMs.toInt())
         circularTimer.progress = ((remainingMs.toFloat() / currMs.toFloat()) * 100f).toInt().coerceIn(0, 100)
 
-        // Вращение риски (палочки)
         val stepMs = currentTiming.step.coerceAtLeast(0L)
         if (stepMs > 0) {
-            // Инвертируем направление (против часовой стрелки), чтобы совпадало с убывающим индикатором
             val rotationAngle = -((segmentPlayedMs % stepMs).toFloat() / stepMs.toFloat()) * 360f
             layoutStickContainer.rotation = rotationAngle
             layoutStickContainer.visibility = View.VISIBLE
@@ -455,7 +635,6 @@ class VideoPlayerActivity : Activity() {
             layoutStickContainer.visibility = View.GONE
         }
 
-        // Переход на следующий сегмент по завершении упражнения
         if (segmentPlayedMs >= currMs) {
             if (nextTiming != null) {
                 val target = clampSeekTarget(segmentEnd + 10)
@@ -464,8 +643,6 @@ class VideoPlayerActivity : Activity() {
                     beginSeek(target)
                 }
             } else {
-                // Конец видео, упражнение на последнем отрезке выполнено.
-                // Завершаем активность сразу, чтобы избежать "отскоков" и зацикливания таймера.
                 if (!isSeeking) {
                     saveCurrentPositionToConfig(0)
                     finish()
@@ -474,7 +651,6 @@ class VideoPlayerActivity : Activity() {
             return
         }
 
-        // Зацикливание внутри сегмента, если упражнение еще не закончено
         if (isPlaying && !isSeeking) {
             val endEpsilon = 150
             val timeLeftInSegment = (segmentEnd - pos).coerceAtLeast(0)
@@ -500,13 +676,9 @@ class VideoPlayerActivity : Activity() {
             timings.add(SettingsActivity.Timing(0, 0, 0, 0, 1, 1, false))
             changed = true
         }
-
-        // Удаляем любые метки, которые находятся слишком близко к концу (менее 1 сек)
         val initialSize = timings.size
         timings.removeAll { it.time >= duration - 1000 && it.time > 0 }
-        if (timings.size != initialSize) {
-            changed = true
-        }
+        if (timings.size != initialSize) changed = true
 
         if (changed) {
             timings.sortBy { it.time }
@@ -529,174 +701,6 @@ class VideoPlayerActivity : Activity() {
         }
     }
 
-    private fun setViewAndChildrenEnabled(view: View, enabled: Boolean) {
-        view.isEnabled = enabled
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                setViewAndChildrenEnabled(view.getChildAt(i), enabled)
-            }
-        }
-    }
-
-    private fun showExerciseDialog() {
-        val pos = player.currentPosition.toInt()
-        val sorted = timings.sortedBy { it.time }
-        val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
-        val nextTiming = sorted.filter { it.time > pos }.minByOrNull { it.time }
-        val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
-        val targetTiming = exactTiming ?: currentTiming
-        val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
-
-        val dialogView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 20, 40, 20)
-        }
-
-        val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
-        val grayColor = Color.GRAY
-        val colorStateList = ColorStateList(
-            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-            intArrayOf(greenColor, grayColor)
-        )
-
-        val switchExercise = Switch(this).apply {
-            text = "Включить"
-            isChecked = targetTiming?.isEnabled ?: false
-            setPadding(0, 0, 0, 20)
-            thumbTintList = colorStateList
-            trackTintList = colorStateList
-        }
-        dialogView.addView(switchExercise)
-
-        val exerciseSettingsContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
-        var currentMax = targetTiming?.max ?: 0L
-        var currentStep = targetTiming?.step ?: 0L
-
-        val btnMax = createTimeButton("ЛИМИТ (MAX):", currentMax) { newMs ->
-            currentMax = newMs
-            updateUIEnabledStateForDialog(exerciseSettingsContainer, switchExercise.isChecked, currentMax > 0)
-        }
-        btnMax.tag = "max_group"
-        exerciseSettingsContainer.addView(btnMax)
-
-        val btnStep = createTimeButton("ШАГ ПРИБАВКИ:", currentStep) { newMs -> currentStep = newMs }
-        btnStep.tag = "step_group"
-        exerciseSettingsContainer.addView(btnStep)
-
-        exerciseSettingsContainer.addView(TextView(this).apply {
-            text = "Множитель:"; textSize = 12f; setPadding(0, 20, 0, 0)
-            tag = "mult_label"
-        })
-
-        var selectedMultType = targetTiming?.multType ?: 0
-        var selectedMultVal = targetTiming?.multVal ?: 1
-        val tvMult = TextView(this).apply {
-            text = when(selectedMultType) {
-                1 -> "x$selectedMultVal"
-                2 -> "№ файла $fileNumForDisplay"
-                else -> "Пусто"
-            }
-            textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal)
-            tag = "mult_group"
-        }
-        tvMult.setOnClickListener { v ->
-            if (currentMax <= 0L) {
-                Toast.makeText(this, "Сначала задайте MAX", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val pop = PopupMenu(this, v)
-            pop.menu.add("Пусто"); pop.menu.add("№ файла $fileNumForDisplay")
-            val subMenu = pop.menu.addSubMenu("1-10")
-            for (i in 1..10) subMenu.add("x$i")
-            pop.setOnMenuItemClickListener { item ->
-                val title = item.title.toString()
-                when {
-                    title == "Пусто" -> { selectedMultType = 0; selectedMultVal = 1; tvMult.text = "Пусто" }
-                    title.startsWith("№ файла") -> { selectedMultType = 2; selectedMultVal = 1; tvMult.text = "№ файла $fileNumForDisplay" }
-                    title.startsWith("x") -> {
-                        selectedMultType = 1
-                        selectedMultVal = if (title.length > 1) title.substring(1).toInt() else 1
-                        tvMult.text = "x$selectedMultVal"
-                    }
-                }
-                true
-            }
-            pop.show()
-        }
-        exerciseSettingsContainer.addView(tvMult)
-        dialogView.addView(exerciseSettingsContainer)
-
-        switchExercise.setOnCheckedChangeListener { _, isChecked ->
-            updateUIEnabledStateForDialog(exerciseSettingsContainer, isChecked, currentMax > 0)
-        }
-        updateUIEnabledStateForDialog(exerciseSettingsContainer, switchExercise.isChecked, currentMax > 0)
-
-        val btnClearAll = Button(this).apply {
-            text = "Очистить все тайминги"
-            setTextColor(Color.BLUE)
-            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = 30 }
-            setOnClickListener {
-                timings.clear()
-                addDefaultTimings(if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt())
-                saveTimingsToConfig()
-                drawTicks(if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt())
-                resetTaskTimer()
-                updateUIState()
-                Toast.makeText(this@VideoPlayerActivity, "Тайминги сброшены", Toast.LENGTH_SHORT).show()
-            }
-        }
-        dialogView.addView(btnClearAll)
-
-        val nextLabel = if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)
-        val builder = AlertDialog.Builder(this)
-            .setTitle("Установить ${formatTime(targetTiming?.time ?: 0)} - $nextLabel")
-            .setView(dialogView)
-            .setPositiveButton("Сохранить") { _, _ ->
-                if (exactTiming != null) {
-                    timings.remove(exactTiming)
-                    timings.add(SettingsActivity.Timing(exactTiming.time, currentMax, exactTiming.curr, currentStep, selectedMultType, selectedMultVal, switchExercise.isChecked))
-                } else {
-                    timings.add(SettingsActivity.Timing(pos, currentMax, 0L, currentStep, selectedMultType, selectedMultVal, switchExercise.isChecked))
-                }
-                timings.sortBy { it.time }
-                saveTimingsToConfig()
-                drawTicks(if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()); resetTaskTimer(); updateUIState()
-            }
-            .setNegativeButton("Отмена", null)
-
-        if (exactTiming != null && exactTiming.time != 0) {
-            builder.setNeutralButton("Удалить") { _, _ ->
-                timings.remove(exactTiming); saveTimingsToConfig(); drawTicks(totalDur); resetTaskTimer(); updateUIState()
-            }
-        }
-
-        val dialog = builder.create(); dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(greenColor)
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(greenColor)
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
-    }
-
-    private fun updateUIEnabledStateForDialog(container: ViewGroup, swOn: Boolean, maxOn: Boolean) {
-        val btnMax = container.findViewWithTag<View>("max_group")
-        val btnStep = container.findViewWithTag<View>("step_group")
-        val tvMult = container.findViewWithTag<View>("mult_group")
-        val multLabel = container.findViewWithTag<View>("mult_label")
-
-        setViewAndChildrenEnabled(btnMax, swOn)
-        btnMax.alpha = if (swOn) 1f else 0.35f
-
-        val stepMultEnabled = swOn && maxOn
-        setViewAndChildrenEnabled(btnStep, stepMultEnabled)
-        btnStep.alpha = if (stepMultEnabled) 1f else 0.35f
-
-        setViewAndChildrenEnabled(tvMult, stepMultEnabled)
-        tvMult.alpha = if (stepMultEnabled) 1f else 0.35f
-        multLabel.alpha = if (stepMultEnabled) 1f else 0.35f
-    }
-
     private fun showMmSsInput(initialMs: Long, title: String, onResult: (Long) -> Unit) {
         val totalSec = initialMs / 1000
         val m = (totalSec / 60).toInt()
@@ -715,7 +719,7 @@ class VideoPlayerActivity : Activity() {
 
         val container = LinearLayout(this).apply {
             setPadding(60, 20, 60, 0); orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            addView(etMin); addView(TextView(this@VideoPlayerActivity).apply { text = ":"; setRawInputType(InputType.TYPE_CLASS_NUMBER); textSize = 24f; setPadding(10, 0, 10, 0) })
+            addView(etMin); addView(TextView(this@VideoPlayerActivity).apply { text = ":"; textSize = 24f; setPadding(10, 0, 10, 0) })
             addView(etSec)
         }
 
@@ -736,23 +740,6 @@ class VideoPlayerActivity : Activity() {
         etMin.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(etMin, InputMethodManager.SHOW_IMPLICIT)
-    }
-
-    private fun createTimeButton(label: String, initialMs: Long, onResult: (Long) -> Unit): LinearLayout {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 10, 0, 0) }
-        root.addView(TextView(this).apply { text = label; textSize = 12f })
-        val tv = TextView(this).apply {
-            text = formatTime(initialMs.toInt())
-            textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal)
-        }
-        tv.setOnClickListener {
-            if (!it.isEnabled) return@setOnClickListener
-            showMmSsInput(initialMs, label) { newMs ->
-                tv.text = formatTime(newMs.toInt())
-                onResult(newMs)
-            }
-        }
-        root.addView(tv); return root
     }
 
     private fun saveCurrentPositionToConfig(pos: Int) {
@@ -844,7 +831,11 @@ class VideoPlayerActivity : Activity() {
         val visibility = if (show) View.VISIBLE else View.GONE
         layoutPauseInfo.visibility = visibility
         btnStop.visibility = visibility
-        btnExerciseMenu.visibility = if (show && isFromSettings) View.VISIBLE else View.GONE
+        
+        if (isFromSettings) {
+            layoutExerciseControls.visibility = visibility
+            if (show) updateExerciseControlsUI()
+        }
     }
 
     private fun updateTimeDisplay() {
