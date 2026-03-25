@@ -45,7 +45,9 @@ import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.log10
@@ -310,16 +312,80 @@ class SettingsActivity : AppCompatActivity() {
         popup.menu.add(0, 1, 0, getString(R.string.menu_folder)).setIcon(R.drawable.ic_add_folder)
         popup.menu.add(0, 2, 1, getString(R.string.menu_file)).setIcon(R.drawable.ic_add_video)
         popup.menu.add(0, 3, 2, getString(R.string.menu_refresh)).setIcon(R.drawable.ic_refresh_custom)
+        popup.menu.add(0, 4, 3, "Backup").setIcon(android.R.drawable.ic_menu_save)
         popup.applyPopupForceShowIcon()
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> selectFolderLauncher.launch(null)
                 2 -> selectFileLauncher.launch(arrayOf("video/mp4"))
                 3 -> performFullRefresh()
+                4 -> performBackup()
             }
             true
         }
         popup.show()
+
+        try {
+            val mPopupField = PopupMenu::class.java.getDeclaredField("mPopup").apply { isAccessible = true }
+            val menuPopupHelper = mPopupField.get(popup) ?: return
+            val getPopupMethod = menuPopupHelper.javaClass.getDeclaredMethod("getPopup").apply { isAccessible = true }
+            val popupWindow = getPopupMethod.invoke(menuPopupHelper)
+            val getListViewMethod = popupWindow.javaClass.getMethod("getListView")
+            val listView = getListViewMethod.invoke(popupWindow) as? ListView
+            listView?.setOnItemLongClickListener { _, _, position, _ ->
+                val adapter = listView.adapter
+                val item = adapter.getItem(position) as? MenuItem
+                if (item?.itemId == 4) {
+                    popup.dismiss()
+                    showRestoreBackupDialog()
+                    true
+                } else false
+            }
+        } catch (e: Exception) { Log.e(TAG, "Reflect error", e) }
+    }
+
+    private fun performBackup() {
+        val folder = getFolderDocumentFile() ?: return
+        val configFile = findConfigFileForRead(folder) ?: return
+        try {
+            val content = contentResolver.openInputStream(configFile.uri)?.use { it.bufferedReader().readText() } ?: return
+            val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
+            val backupName = "${CONFIG_FILE_NAME}_${dateStr}.backup"
+            
+            folder.findFile(backupName)?.delete()
+            val backupFile = folder.createFile("application/octet-stream", backupName) ?: return
+            contentResolver.openOutputStream(backupFile.uri)?.use { it.write(content.toByteArray()) }
+            Toast.makeText(this, "Backup создан: $backupName", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) { Log.e(TAG, "Backup error", e) }
+    }
+
+    private fun showRestoreBackupDialog() {
+        val folder = getFolderDocumentFile() ?: return
+        val backupFiles = folder.listFiles().filter { it.name?.endsWith(".backup") == true }
+        if (backupFiles.isEmpty()) {
+            Toast.makeText(this, "Бэкапы не найдены", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val names = backupFiles.map { it.name ?: "" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Восстановить из backup?")
+            .setItems(names) { _, which ->
+                restoreBackup(backupFiles[which])
+            }
+            .setNegativeButton(getString(R.string.dialog_cancel), null)
+            .show()
+    }
+
+    private fun restoreBackup(backupFile: DocumentFile) {
+        val folder = getFolderDocumentFile() ?: return
+        try {
+            val content = contentResolver.openInputStream(backupFile.uri)?.use { it.bufferedReader().readText() } ?: return
+            val configFile = findOrCreateConfigFile(folder) ?: return
+            contentResolver.openOutputStream(configFile.uri, "wt")?.use { it.write(content.toByteArray()) }
+            loadUIFromConfig()
+            Toast.makeText(this, "Восстановлено из ${backupFile.name}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) { Log.e(TAG, "Restore error", e) }
     }
 
     private fun addSingleFile(uri: Uri) {
