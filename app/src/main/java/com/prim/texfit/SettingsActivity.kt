@@ -101,7 +101,7 @@ class SettingsActivity : AppCompatActivity() {
                 val currentState = categoryState[exName]?.toIntOrNull() ?: 0
                 var nextStep = currentState + 1
                 
-                val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
+                val exerciseFiles = sourceTable.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
                 if (exerciseFiles.isEmpty()) continue
                 val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
                 val resetVal = resetState[exName]?.toIntOrNull() ?: 0
@@ -120,7 +120,7 @@ class SettingsActivity : AppCompatActivity() {
             for (exName in categoryState.keys) {
                 if (exName !in changedExercises) {
                     val currentState = categoryState[exName]?.toIntOrNull() ?: 0
-                    val exerciseFiles = allItems.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
+                    val exerciseFiles = sourceTable.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
                     if (exerciseFiles.isNotEmpty()) {
                         val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
                         val resetVal = resetState[exName]?.toIntOrNull() ?: 0
@@ -472,7 +472,7 @@ class SettingsActivity : AppCompatActivity() {
             json.put("category_state", stateObj)
             
             val resetObj = JSONObject()
-            resetState.forEach { (k, v) -> resetObj.put(k, v) }
+            resetState.forEach { (k, v) -> resetState[k] = v; resetObj.put(k, v) }
             json.put("reset_state", resetObj)
 
             val trainingTimeObj = JSONObject().apply {
