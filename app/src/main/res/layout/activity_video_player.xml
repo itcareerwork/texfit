@@ -80,7 +80,9 @@
         android:orientation="vertical"
         android:background="#A0000000"
         android:padding="8dp"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
 
         <TextView
             android:id="@+id/tv_control_segment_label"
@@ -113,15 +115,45 @@
                 android:textColor="#CCCCCC"
                 android:textSize="9sp"
                 android:layout_marginTop="4dp" />
-            <TextView
-                android:id="@+id/tv_control_max"
+            
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="28dp"
-                android:background="@android:drawable/editbox_background_normal"
-                android:gravity="center"
-                android:text="00:00"
-                android:textColor="#000000"
-                android:textSize="14sp" />
+                android:orientation="horizontal"
+                android:gravity="center">
+                <TextView
+                    android:id="@+id/tv_control_max_min"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:gravity="center"
+                    android:text="00"
+                    android:textColor="#000000"
+                    android:textSize="14sp"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=":"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:paddingStart="2dp"
+                    android:paddingEnd="2dp" />
+                <TextView
+                    android:id="@+id/tv_control_max_sec"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:gravity="center"
+                    android:text="00"
+                    android:textColor="#000000"
+                    android:textSize="14sp"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -130,15 +162,45 @@
                 android:textColor="#CCCCCC"
                 android:textSize="9sp"
                 android:layout_marginTop="4dp" />
-            <TextView
-                android:id="@+id/tv_control_step"
+            
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="28dp"
-                android:background="@android:drawable/editbox_background_normal"
-                android:gravity="center"
-                android:text="00:00"
-                android:textColor="#000000"
-                android:textSize="14sp" />
+                android:orientation="horizontal"
+                android:gravity="center">
+                <TextView
+                    android:id="@+id/tv_control_step_min"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:gravity="center"
+                    android:text="00"
+                    android:textColor="#000000"
+                    android:textSize="14sp"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=":"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:paddingStart="2dp"
+                    android:paddingEnd="2dp" />
+                <TextView
+                    android:id="@+id/tv_control_step_sec"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:gravity="center"
+                    android:text="00"
+                    android:textColor="#000000"
+                    android:textSize="14sp"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"

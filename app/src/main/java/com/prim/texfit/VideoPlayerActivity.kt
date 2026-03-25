@@ -1,7 +1,6 @@
 package com.prim.texfit
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -10,26 +9,27 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.text.InputType
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.InputMethodManager
 import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.PopupWindow
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.OptIn
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
@@ -39,6 +39,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.util.Locale
 
+@OptIn(UnstableApi::class)
 class VideoPlayerActivity : Activity() {
     private lateinit var playerView: PlayerView
     private lateinit var player: ExoPlayer
@@ -64,8 +65,12 @@ class VideoPlayerActivity : Activity() {
     private lateinit var tvControlSegmentLabel: TextView
     private lateinit var swExerciseEnabled: SwitchCompat
     private lateinit var layoutSettingsFields: View
-    private lateinit var tvControlMax: TextView
-    private lateinit var tvControlStep: TextView
+    
+    private lateinit var tvControlMaxMin: TextView
+    private lateinit var tvControlMaxSec: TextView
+    private lateinit var tvControlStepMin: TextView
+    private lateinit var tvControlStepSec: TextView
+    
     private lateinit var tvControlMult: TextView
     private lateinit var btnControlSave: Button
     private lateinit var btnControlDelete: Button
@@ -78,10 +83,8 @@ class VideoPlayerActivity : Activity() {
     private var isFromSettings: Boolean = false
     private var timings = mutableListOf<SettingsActivity.Timing>()
 
-    // Промежуточные переменные для хранения изменений до сохранения
+    // Промежуточные переменные
     private var pendingEnabled: Boolean = false
-    private var pendingMax: Long = 0L
-    private var pendingStep: Long = 0L
     private var pendingMultType: Int = 0
     private var pendingMultVal: Int = 1
 
@@ -171,8 +174,12 @@ class VideoPlayerActivity : Activity() {
         tvControlSegmentLabel = findViewById(R.id.tv_control_segment_label)
         swExerciseEnabled = findViewById(R.id.sw_exercise_enabled)
         layoutSettingsFields = findViewById(R.id.layout_settings_fields)
-        tvControlMax = findViewById(R.id.tv_control_max)
-        tvControlStep = findViewById(R.id.tv_control_step)
+        
+        tvControlMaxMin = findViewById(R.id.tv_control_max_min)
+        tvControlMaxSec = findViewById(R.id.tv_control_max_sec)
+        tvControlStepMin = findViewById(R.id.tv_control_step_min)
+        tvControlStepSec = findViewById(R.id.tv_control_step_sec)
+        
         tvControlMult = findViewById(R.id.tv_control_mult)
         btnControlSave = findViewById(R.id.btn_control_save)
         btnControlDelete = findViewById(R.id.btn_control_delete)
@@ -334,26 +341,16 @@ class VideoPlayerActivity : Activity() {
 
         swExerciseEnabled.setOnCheckedChangeListener { _, isChecked ->
             pendingEnabled = isChecked
-            updateExerciseControlsVisibility(isChecked, pendingMax > 0)
+            updateExerciseControlsVisibility(isChecked, getMsFromUI(isMax = true) > 0)
         }
 
-        tvControlMax.setOnClickListener {
-            showMmSsInput(pendingMax, "ЛИМИТ (MAX):") { newMs ->
-                pendingMax = newMs
-                tvControlMax.text = formatTime(newMs.toInt())
-                updateExerciseControlsVisibility(pendingEnabled, newMs > 0)
-            }
-        }
-
-        tvControlStep.setOnClickListener {
-            showMmSsInput(pendingStep, "ШАГ ПРИБАВКИ:") { newMs ->
-                pendingStep = newMs
-                tvControlStep.text = formatTime(newMs.toInt())
-            }
-        }
+        tvControlMaxMin.setOnClickListener { showNumericKeypadPopup(tvControlMaxMin) }
+        tvControlMaxSec.setOnClickListener { showNumericKeypadPopup(tvControlMaxSec) }
+        tvControlStepMin.setOnClickListener { showNumericKeypadPopup(tvControlStepMin) }
+        tvControlStepSec.setOnClickListener { showNumericKeypadPopup(tvControlStepSec) }
 
         tvControlMult.setOnClickListener { v ->
-            if (pendingMax <= 0L) {
+            if (getMsFromUI(isMax = true) <= 0L) {
                 Toast.makeText(this, "Сначала задайте MAX", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -380,9 +377,10 @@ class VideoPlayerActivity : Activity() {
         btnControlSave.setOnClickListener {
             val pos = player.currentPosition.toInt()
             val target = findOrAddTiming(pos)
+            
             target.isEnabled = pendingEnabled
-            target.max = pendingMax
-            target.step = pendingStep
+            target.max = getMsFromUI(isMax = true)
+            target.step = getMsFromUI(isMax = false)
             target.multType = pendingMultType
             target.multVal = pendingMultVal
             
@@ -391,6 +389,7 @@ class VideoPlayerActivity : Activity() {
             resetTaskTimer()
             updateUIState()
             updateExerciseControlsUI()
+            
             Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
         }
 
@@ -420,13 +419,111 @@ class VideoPlayerActivity : Activity() {
         }
     }
 
+    private fun getMsFromUI(isMax: Boolean = true): Long {
+        val mins = (if (isMax) tvControlMaxMin.text else tvControlStepMin.text).toString().toIntOrNull() ?: 0
+        val secs = (if (isMax) tvControlMaxSec.text else tvControlStepSec.text).toString().toIntOrNull() ?: 0
+        return (mins * 60 + secs) * 1000L
+    }
+
+    private var popup: PopupWindow? = null
+
+    private fun showNumericKeypadPopup(target: TextView) {
+        val isMinField = target == tvControlMaxMin || target == tvControlStepMin
+        
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(8, 8, 8, 8)
+            setBackgroundColor(Color.parseColor("#E0000000"))
+        }
+
+        val display = TextView(this).apply {
+            text = ""
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 4)
+        }
+        dialogView.addView(display)
+
+        val grid = GridLayout(this).apply {
+            columnCount = 3
+            rowCount = 4
+            alignmentMode = GridLayout.ALIGN_BOUNDS
+        }
+
+        var currentInput = ""
+
+        val onDigitClick = { digit: String ->
+            if (currentInput.length < 2) {
+                currentInput += digit
+                display.text = currentInput
+                if (currentInput.length == 2) {
+                    var value = currentInput.toInt()
+                    if (isMinField) {
+                        if (value > 90) value = 90
+                    } else {
+                        if (value > 59) value = 59
+                    }
+                    target.text = String.format(Locale.US, "%02d", value)
+                    updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0)
+                    handler.postDelayed({ popup?.dismiss() }, 200)
+                }
+            }
+        }
+
+        val btnSize = (28 * resources.displayMetrics.density).toInt()
+        
+        fun createKeypadBtn(label: String, onClick: (String) -> Unit): View {
+            return Button(this).apply {
+                text = label
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg)
+                backgroundTintList = ColorStateList.valueOf(Color.parseColor("#80FFFFFF"))
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = btnSize; height = btnSize; setMargins(2, 2, 2, 2)
+                }
+                setPadding(0, 0, 0, 0)
+                setOnClickListener { onClick(label) }
+            }
+        }
+
+        for (i in 1..9) grid.addView(createKeypadBtn(i.toString(), onDigitClick))
+        grid.addView(createKeypadBtn("C") { currentInput = ""; display.text = "" })
+        grid.addView(createKeypadBtn("0", onDigitClick))
+        grid.addView(createKeypadBtn("OK") {
+            if (currentInput.isNotEmpty()) {
+                var value = currentInput.toInt()
+                if (isMinField) {
+                    if (value > 90) value = 90
+                } else {
+                    if (value > 59) value = 59
+                }
+                target.text = String.format(Locale.US, "%02d", value)
+                updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0)
+            }
+            popup?.dismiss()
+        })
+
+        dialogView.addView(grid)
+        popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        popup?.showAsDropDown(target)
+    }
+
+    private fun setFieldsFromMs(ms: Long, tvMin: TextView, tvSec: TextView) {
+        val totalSec = ms / 1000
+        val m = (totalSec / 60).toInt()
+        val s = (totalSec % 60).toInt()
+        tvMin.text = String.format(Locale.US, "%02d", m)
+        tvSec.text = String.format(Locale.US, "%02d", s)
+    }
+
     private fun findOrAddTiming(pos: Int): SettingsActivity.Timing {
         val sorted = timings.sortedBy { it.time }
         val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
         if (exactTiming != null) return exactTiming
         
         val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
-        // При создании новой метки копируем настройки из предыдущей, но обнуляем прогресс (curr)
         val newTiming = SettingsActivity.Timing(
             pos, 
             currentTiming?.max ?: 0L, 
@@ -453,33 +550,31 @@ class VideoPlayerActivity : Activity() {
         val nextLabel = if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)
         tvControlSegmentLabel.text = "${formatTime(currentTiming.time)} - $nextLabel"
         
-        // Инициализируем промежуточные переменные из текущего тайминга
         pendingEnabled = currentTiming.isEnabled
-        pendingMax = currentTiming.max
-        pendingStep = currentTiming.step
         pendingMultType = currentTiming.multType
         pendingMultVal = currentTiming.multVal
 
         swExerciseEnabled.isChecked = pendingEnabled
-        tvControlMax.text = formatTime(pendingMax.toInt())
-        tvControlStep.text = formatTime(pendingStep.toInt())
+        setFieldsFromMs(currentTiming.max, tvControlMaxMin, tvControlMaxSec)
+        setFieldsFromMs(currentTiming.step, tvControlStepMin, tvControlStepSec)
+        
         tvControlMult.text = when(pendingMultType) {
             1 -> "x$pendingMultVal"
             2 -> "№ файла $fileNumForDisplay"
             else -> "Пусто"
         }
         
-        updateExerciseControlsVisibility(pendingEnabled, pendingMax > 0)
+        updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0)
         btnControlDelete.visibility = if (currentTiming.time == 0) View.GONE else View.VISIBLE
     }
 
     private fun updateExerciseControlsVisibility(swOn: Boolean, maxOn: Boolean) {
-        tvControlMax.isEnabled = swOn
-        tvControlMax.alpha = if (swOn) 1f else 0.4f
+        tvControlMaxMin.isEnabled = swOn; tvControlMaxSec.isEnabled = swOn
+        tvControlMaxMin.alpha = if (swOn) 1f else 0.4f; tvControlMaxSec.alpha = if (swOn) 1f else 0.4f
         
         val stepMultEnabled = swOn && maxOn
-        tvControlStep.isEnabled = stepMultEnabled
-        tvControlStep.alpha = if (stepMultEnabled) 1f else 0.4f
+        tvControlStepMin.isEnabled = stepMultEnabled; tvControlStepSec.isEnabled = stepMultEnabled
+        tvControlStepMin.alpha = if (stepMultEnabled) 1f else 0.4f; tvControlStepSec.alpha = if (stepMultEnabled) 1f else 0.4f
         tvControlMult.isEnabled = stepMultEnabled
         tvControlMult.alpha = if (stepMultEnabled) 1f else 0.4f
     }
@@ -701,49 +796,8 @@ class VideoPlayerActivity : Activity() {
         }
     }
 
-    private fun showMmSsInput(initialMs: Long, title: String, onResult: (Long) -> Unit) {
-        val totalSec = initialMs / 1000
-        val m = (totalSec / 60).toInt()
-        val s = (totalSec % 60).toInt()
-
-        val etMin = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER; hint = "Мин"
-            setText(m.toString()); setGravity(Gravity.CENTER)
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-        }
-        val etSec = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER; hint = "Сек"
-            setText(String.format("%02d", s)); setGravity(Gravity.CENTER)
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-        }
-
-        val container = LinearLayout(this).apply {
-            setPadding(60, 20, 60, 0); orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            addView(etMin); addView(TextView(this@VideoPlayerActivity).apply { text = ":"; textSize = 24f; setPadding(10, 0, 10, 0) })
-            addView(etSec)
-        }
-
-        val d = AlertDialog.Builder(this)
-            .setTitle(title).setView(container)
-            .setPositiveButton("OK") { _, _ ->
-                val mins = etMin.text.toString().toIntOrNull() ?: 0
-                val secs = etSec.text.toString().toIntOrNull() ?: 0
-                onResult((mins * 60 + secs.coerceIn(0, 59)) * 1000L)
-            }
-            .setNegativeButton("Отмена", null).create()
-
-        d.show()
-        val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(greenColor)
-        d.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(greenColor)
-
-        etMin.requestFocus()
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.showSoftInput(etMin, InputMethodManager.SHOW_IMPLICIT)
-    }
-
     private fun saveCurrentPositionToConfig(pos: Int) {
-        if (itemIndexInPlaylist == -1 || isFromSettings) return
+        if (videoItemId.isEmpty() || isFromSettings) return
         try {
             val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
@@ -754,8 +808,15 @@ class VideoPlayerActivity : Activity() {
             } ?: return
 
             val titlesArray = json.optJSONArray("titles") ?: return
-            val entry = titlesArray.optJSONArray(itemIndexInPlaylist) ?: return
-            entry.put(2, pos)
+            
+            // Находим нужный элемент по ID, а не по индексу в плейлисте
+            for (i in 0 until titlesArray.length()) {
+                val entry = titlesArray.optJSONArray(i)
+                if (entry != null && entry.optString(0) == videoItemId) {
+                    entry.put(2, pos)
+                    break
+                }
+            }
 
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
                 OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
