@@ -22,12 +22,12 @@
     <!-- Счетчик упражнений с круговым таймером (верхний правый) -->
     <FrameLayout
         android:id="@+id/layout_counter_container"
-        android:layout_width="110dp"
-        android:layout_height="110dp"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
         android:layout_marginTop="16dp"
-        android:layout_marginEnd="80dp"
+        android:layout_marginEnd="60dp"
         android:visibility="gone">
 
         <com.google.android.material.progressindicator.CircularProgressIndicator
@@ -37,22 +37,22 @@
             android:layout_gravity="center"
             app:indicatorColor="#FFEB3B"
             app:trackColor="#40FFFFFF"
-            app:indicatorSize="100dp"
-            app:trackThickness="4dp" />
+            app:indicatorSize="150dp"
+            app:trackThickness="8dp" />
 
         <!-- Контейнер для риски (палочки), которая делает оборот за время шага -->
         <FrameLayout
             android:id="@+id/layout_stick_container"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
             android:layout_gravity="center">
 
             <View
                 android:id="@+id/circular_stick"
-                android:layout_width="3dp"
-                android:layout_height="10dp"
+                android:layout_width="5dp"
+                android:layout_height="20dp"
                 android:layout_gravity="center_horizontal|top"
-                android:background="#A0A0A0" />
+                android:background="#4CAF50" />
         </FrameLayout>
 
         <TextView
@@ -61,7 +61,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:textColor="#FFEB3B"
-            android:textSize="28sp"
+            android:textSize="42sp"
             android:textStyle="bold"
             android:shadowColor="#000000"
             android:shadowDx="2"
@@ -72,14 +72,14 @@
     <!-- Панель управления упражнением (слева) -->
     <LinearLayout
         android:id="@+id/layout_exercise_controls"
-        android:layout_width="150dp"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:layout_centerVertical="true"
         android:layout_alignParentStart="true"
         android:layout_marginStart="16dp"
         android:orientation="vertical"
         android:background="#A0000000"
-        android:padding="8dp"
+        android:padding="12dp"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true">
@@ -90,9 +90,9 @@
             android:layout_height="wrap_content"
             android:text="00:00 - 00:00"
             android:textColor="#FFFFFF"
-            android:textSize="10sp"
+            android:textSize="14sp"
             android:gravity="center"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="8dp" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/sw_exercise_enabled"
@@ -100,7 +100,7 @@
             android:layout_height="wrap_content"
             android:text="Включить"
             android:textColor="#FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="14sp" />
 
         <LinearLayout
             android:id="@+id/layout_settings_fields"
@@ -113,12 +113,12 @@
                 android:layout_height="wrap_content"
                 android:text="ЛИМИТ (MAX):"
                 android:textColor="#CCCCCC"
-                android:textSize="9sp"
-                android:layout_marginTop="4dp" />
+                android:textSize="11sp"
+                android:layout_marginTop="8dp" />
             
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
+                android:layout_height="42dp"
                 android:orientation="horizontal"
                 android:gravity="center">
                 <TextView
@@ -130,7 +130,7 @@
                     android:gravity="center"
                     android:text="00"
                     android:textColor="#000000"
-                    android:textSize="14sp"
+                    android:textSize="20sp"
                     android:clickable="true"
                     android:focusable="true" />
                 <TextView
@@ -139,8 +139,8 @@
                     android:text=":"
                     android:textColor="#FFFFFF"
                     android:textStyle="bold"
-                    android:paddingStart="2dp"
-                    android:paddingEnd="2dp" />
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp" />
                 <TextView
                     android:id="@+id/tv_control_max_sec"
                     android:layout_width="0dp"
@@ -150,7 +150,7 @@
                     android:gravity="center"
                     android:text="00"
                     android:textColor="#000000"
-                    android:textSize="14sp"
+                    android:textSize="20sp"
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
@@ -160,12 +160,12 @@
                 android:layout_height="wrap_content"
                 android:text="ШАГ ПРИБАВКИ:"
                 android:textColor="#CCCCCC"
-                android:textSize="9sp"
-                android:layout_marginTop="4dp" />
+                android:textSize="11sp"
+                android:layout_marginTop="8dp" />
             
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
+                android:layout_height="42dp"
                 android:orientation="horizontal"
                 android:gravity="center">
                 <TextView
@@ -177,7 +177,7 @@
                     android:gravity="center"
                     android:text="00"
                     android:textColor="#000000"
-                    android:textSize="14sp"
+                    android:textSize="20sp"
                     android:clickable="true"
                     android:focusable="true" />
                 <TextView
@@ -186,8 +186,8 @@
                     android:text=":"
                     android:textColor="#FFFFFF"
                     android:textStyle="bold"
-                    android:paddingStart="2dp"
-                    android:paddingEnd="2dp" />
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp" />
                 <TextView
                     android:id="@+id/tv_control_step_sec"
                     android:layout_width="0dp"
@@ -197,7 +197,7 @@
                     android:gravity="center"
                     android:text="00"
                     android:textColor="#000000"
-                    android:textSize="14sp"
+                    android:textSize="20sp"
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
@@ -207,25 +207,25 @@
                 android:layout_height="wrap_content"
                 android:text="Множитель:"
                 android:textColor="#CCCCCC"
-                android:textSize="9sp"
-                android:layout_marginTop="4dp" />
+                android:textSize="11sp"
+                android:layout_marginTop="8dp" />
             <TextView
                 android:id="@+id/tv_control_mult"
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
+                android:layout_height="42dp"
                 android:background="@android:drawable/editbox_background_normal"
                 android:gravity="center"
                 android:text="Пусто"
                 android:textColor="#000000"
-                android:textSize="14sp" />
+                android:textSize="18sp" />
 
             <Button
                 android:id="@+id/btn_control_save"
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
-                android:layout_marginTop="12dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="16dp"
                 android:text="Сохранить"
-                android:textSize="9sp"
+                android:textSize="12sp"
                 android:backgroundTint="@android:color/holo_green_dark"
                 android:padding="0dp"
                 android:minHeight="0dp"
@@ -234,10 +234,10 @@
             <Button
                 android:id="@+id/btn_control_delete"
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
-                android:layout_marginTop="4dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
                 android:text="Удалить"
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:backgroundTint="#80FF0000"
                 android:padding="0dp"
                 android:minHeight="0dp"
@@ -246,10 +246,10 @@
             <Button
                 android:id="@+id/btn_control_clear_all"
                 android:layout_width="match_parent"
-                android:layout_height="28dp"
-                android:layout_marginTop="4dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
                 android:text="Сброс всех"
-                android:textSize="9sp"
+                android:textSize="11sp"
                 android:backgroundTint="#800000FF"
                 android:padding="0dp"
                 android:minHeight="0dp"
@@ -300,7 +300,7 @@
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <!-- Секундомер внизу -->
+        <!-- Секундомер внизу (увеличен) -->
         <LinearLayout
             android:id="@+id/layout_bottom_stopwatch"
             android:layout_width="wrap_content"
@@ -308,7 +308,7 @@
             android:orientation="vertical"
             android:gravity="center"
             android:background="#33FFFFFF"
-            android:padding="4dp"
+            android:padding="8dp"
             android:visibility="gone">
             
             <TextView
@@ -317,15 +317,16 @@
                 android:layout_height="wrap_content"
                 android:text="00:00"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:textSize="24sp"
+                android:textStyle="bold"
                 android:alpha="0.9" />
                 
             <Button
                 android:id="@+id/btn_stopwatch_toggle"
-                android:layout_width="60dp"
-                android:layout_height="40dp"
+                android:layout_width="100dp"
+                android:layout_height="50dp"
                 android:text="START"
-                android:textSize="10sp"
+                android:textSize="14sp"
                 android:alpha="0.7"
                 android:padding="0dp" />
         </LinearLayout>

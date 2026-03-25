@@ -432,16 +432,16 @@ class VideoPlayerActivity : Activity() {
         
         val dialogView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(8, 8, 8, 8)
+            setPadding(12, 12, 12, 12)
             setBackgroundColor(Color.parseColor("#E0000000"))
         }
 
         val display = TextView(this).apply {
             text = ""
-            textSize = 14f
+            textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 4)
+            setPadding(0, 0, 0, 8)
         }
         dialogView.addView(display)
 
@@ -471,17 +471,17 @@ class VideoPlayerActivity : Activity() {
             }
         }
 
-        val btnSize = (28 * resources.displayMetrics.density).toInt()
+        val btnSize = (48 * resources.displayMetrics.density).toInt()
         
         fun createKeypadBtn(label: String, onClick: (String) -> Unit): View {
             return Button(this).apply {
                 text = label
-                textSize = 12f
+                textSize = 18f
                 setTextColor(Color.WHITE)
                 background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg)
                 backgroundTintList = ColorStateList.valueOf(Color.parseColor("#80FFFFFF"))
                 layoutParams = GridLayout.LayoutParams().apply {
-                    width = btnSize; height = btnSize; setMargins(2, 2, 2, 2)
+                    width = btnSize; height = btnSize; setMargins(4, 4, 4, 4)
                 }
                 setPadding(0, 0, 0, 0)
                 setOnClickListener { onClick(label) }
