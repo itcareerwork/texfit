@@ -320,11 +320,11 @@ class VideoPlayerActivity : Activity() {
         btnStopwatchToggle.setOnClickListener {
             if (stopwatchRunning) {
                 stopwatchRunning = false
-                btnStopwatchToggle.text = "START"
+                btnStopwatchToggle.text = "СЕКУНДОМЕР"
             } else {
                 stopwatchBaseTime = SystemClock.elapsedRealtime()
                 stopwatchRunning = true
-                btnStopwatchToggle.text = "STOP"
+                btnStopwatchToggle.text = "СТОП"
             }
         }
         btnStopwatchToggle.setOnLongClickListener {

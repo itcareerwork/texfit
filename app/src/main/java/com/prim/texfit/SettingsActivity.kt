@@ -64,6 +64,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
 
         fun applyLaunchLogic(json: JSONObject): JSONObject {
+            val currStep = json.optInt("curr_step", 1)
             val sessionOptions = mutableListOf<String>()
             json.optJSONArray("session_options")?.let { arr ->
                 for (i in 0 until arr.length()) sessionOptions.add(arr.getString(i))
@@ -106,7 +107,7 @@ class SettingsActivity : AppCompatActivity() {
                 val exerciseFiles = sourceTable.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
                 if (exerciseFiles.isEmpty()) continue
                 val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                val resetVal = resetState[exName]?.toIntOrNull() ?: 0
+                val resetVal = resetState[exName]?.toIntOrNull() ?: 1
                 if (nextStep > limit) nextStep = resetVal
                 
                 for (row in group) {
@@ -125,7 +126,7 @@ class SettingsActivity : AppCompatActivity() {
                     val exerciseFiles = sourceTable.filter { it.exerciseName == exName && it.numFile.isNotEmpty() }
                     if (exerciseFiles.isNotEmpty()) {
                         val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                        val resetVal = resetState[exName]?.toIntOrNull() ?: 0
+                        val resetVal = resetState[exName]?.toIntOrNull() ?: 1
                         var nextStep = currentState + 1
                         if (nextStep > limit) nextStep = resetVal
                         categoryState[exName] = String.format(Locale.US, "%03d", nextStep)
@@ -142,10 +143,15 @@ class SettingsActivity : AppCompatActivity() {
                             2 -> fileNum.toLong()
                             else -> 1L
                         }
-                        val newCurr = when {
-                            t.curr == 0L -> t.step
-                            t.curr == t.step && multiplier > 1 -> t.step * multiplier
-                            else -> t.curr + (t.step * multiplier)
+                        val newCurr = if (currStep == 0) {
+                            when {
+                                t.curr == 0L -> t.step
+                                t.curr == t.step && multiplier > 1 -> t.step * multiplier
+                                else -> t.curr + (t.step * multiplier)
+                            }
+                        } else {
+                            // При curr_step = 1: При первом запуске curr = 0, далее curr = curr + step * multiplier
+                            t.curr + (t.step * multiplier)
                         }
                         t.curr = newCurr.coerceAtMost(t.max)
                     }
@@ -481,7 +487,7 @@ class SettingsActivity : AppCompatActivity() {
 
             exerciseOptions.forEach { ex ->
                 if (!categoryState.containsKey(ex)) categoryState[ex] = "000"
-                if (!resetState.containsKey(ex)) resetState[ex] = "000"
+                if (!resetState.containsKey(ex)) resetState[ex] = "001"
             }
 
             val array = json.optJSONArray("video_items") ?: JSONArray()
@@ -525,6 +531,9 @@ class SettingsActivity : AppCompatActivity() {
             
             if (!json.has("button")) {
                 json.put("button", 0)
+            }
+            if (!json.has("curr_step")) {
+                json.put("curr_step", 1)
             }
             
             val array = JSONArray()
@@ -738,7 +747,7 @@ class SettingsActivity : AppCompatActivity() {
                         updateItem(pos, item.copy(sessionNum = sNumStr, sessionName = sName, numExercise = ""))
                     } else { 
                         updateItem(pos, item.copy(exerciseName = value, numFile = ""))
-                        if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000"; resetState[value] = "000" } 
+                        if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000"; resetState[value] = "001" } 
                     }
                     updateTopInputUI(); alertDialog?.dismiss()
                 }
@@ -760,7 +769,7 @@ class SettingsActivity : AppCompatActivity() {
                         leftBox.addView(leftValue)
                         val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }
                         rightBox.addView(TextView(this@SettingsActivity).apply { text = "Сброс на:"; textSize = 12f })
-                        val rightValue = TextView(this@SettingsActivity).apply { text = resetState[value] ?: "000"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
+                        val rightValue = TextView(this@SettingsActivity).apply { text = resetState[value] ?: "001"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         rightValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v)
                             pop.menu.add("000"); pop.menu.add("001")
@@ -893,7 +902,7 @@ class SettingsActivity : AppCompatActivity() {
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
                         val name = input.text.toString().trim()
                         if (name.isNotEmpty()) {
-                            if (!exerciseOptions.contains(name)) { exerciseOptions.add(name); exerciseOptions.sort(); categoryState[name] = "000"; resetState[name] = "000" }
+                            if (!exerciseOptions.contains(name)) { exerciseOptions.add(name); exerciseOptions.sort(); categoryState[name] = "000"; resetState[name] = "001" }
                             updateItem(pos, getItem(pos).copy(exerciseName = name))
                         }
                     }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
