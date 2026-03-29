@@ -145,13 +145,18 @@ class SettingsActivity : AppCompatActivity() {
                         }
                         val newCurr = if (currStep == 0) {
                             when {
-                                t.curr == 0L -> t.step
-                                t.curr == t.step && multiplier > 1 -> t.step * multiplier
-                                else -> t.curr + (t.step * multiplier)
+                                t.curr == -1L -> 0L // 1) Первый запуск: был -1 (установка), стал 0. Плеер проиграет 0.
+                                t.curr == 0L -> -t.step // 2) Второй запуск: был 0, стал -step. Плеер проиграет abs(-step) = step.
+                                t.curr < 0L -> t.step * multiplier // 3) Третий запуск: был -step, стал step * multiplier.
+                                else -> t.curr + (t.step * multiplier) // 4) Четвертый и далее.
                             }
                         } else {
-                            // При curr_step = 1: При первом запуске curr = 0, далее curr = curr + step * multiplier
-                            t.curr + (t.step * multiplier)
+                            // При curr_step = 1: При первом запуске (если curr < 0) база = 0
+                            if (t.curr < 0) {
+                                t.step * multiplier
+                            } else {
+                                t.curr + (t.step * multiplier)
+                            }
                         }
                         t.curr = newCurr.coerceAtMost(t.max)
                     }

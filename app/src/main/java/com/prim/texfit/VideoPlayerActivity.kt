@@ -82,6 +82,7 @@ class VideoPlayerActivity : Activity() {
     private var itemIndexInPlaylist: Int = -1
     private var isFromSettings: Boolean = false
     private var timings = mutableListOf<SettingsActivity.Timing>()
+    private var currStepConfig: Int = 1
 
     // Промежуточные переменные
     private var pendingEnabled: Boolean = false
@@ -383,6 +384,15 @@ class VideoPlayerActivity : Activity() {
             target.step = getMsFromUI(isMax = false)
             target.multType = pendingMultType
             target.multVal = pendingMultVal
+
+            if (currStepConfig == 1) {
+                if (target.step > 0) target.curr = -target.step
+                else target.curr = 0L
+            } else {
+                // Алгоритм (A), curr_step == 0
+                // Установка: записываем -1 как маркер "Установлено"
+                target.curr = -1L
+            }
             
             saveTimingsToConfig()
             drawTicks(player.duration.toInt())
@@ -607,7 +617,8 @@ class VideoPlayerActivity : Activity() {
             val pos = d.toInt()
             val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
             if (currentTiming != null && currentTiming.isEnabled && currentTiming.max > 0L) {
-                val currMs = currentTiming.curr.coerceAtLeast(0L)
+                // В плеере используем abs(), чтобы -step проигрывался как step
+                val currMs = if (currentTiming.curr == -1L) 0L else Math.abs(currentTiming.curr).coerceAtLeast(0L)
                 if (segmentPlayedMs < currMs) {
                     val target = clampSeekTarget(currentTiming.time + 10)
                     beginSeek(target)
@@ -685,7 +696,9 @@ class VideoPlayerActivity : Activity() {
 
         layoutCounterContainer.visibility = View.VISIBLE
 
-        val currMs = currentTiming.curr.coerceAtLeast(0L)
+        // Для плеера -1 это 0. А -step это step.
+        val currMs = if (currentTiming.curr == -1L) 0L else Math.abs(currentTiming.curr).coerceAtLeast(0L)
+        
         if (currMs == 0L) {
             if (nextTiming != null && segmentEnd > segmentStart) {
                 if (isPlaying && !isSeeking) {
@@ -831,6 +844,7 @@ class VideoPlayerActivity : Activity() {
             val configFile = folder.findFile("texfit.cfg") ?: return
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 val json = JSONObject(inputStream.bufferedReader().readText())
+                currStepConfig = json.optInt("curr_step", 1)
 
                 val videoItems = json.optJSONArray("video_items") ?: return
                 for (i in 0 until videoItems.length()) {
