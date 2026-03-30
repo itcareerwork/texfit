@@ -191,6 +191,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvSetTime: TextView
     private lateinit var etTopInput: EditText
     private lateinit var btnLaunch: Button
+    private lateinit var btnHelp: ImageButton
     
     private lateinit var hColor: TextView
     private lateinit var hCat1: TextView
@@ -246,6 +247,7 @@ class SettingsActivity : AppCompatActivity() {
         tvSetTime = findViewById(R.id.tv_set_time)
         etTopInput = findViewById(R.id.et_top_input)
         btnLaunch = findViewById(R.id.btn_launch)
+        btnHelp = findViewById(R.id.btn_help)
         
         hColor = findViewById(R.id.header_color)
         hCat1 = findViewById(R.id.header_cat1)
@@ -254,9 +256,8 @@ class SettingsActivity : AppCompatActivity() {
         hSize = findViewById(R.id.header_size)
         hNote = findViewById(R.id.header_note)
 
-        btnLaunch.setOnClickListener { 
-            performLaunchStep()
-        }
+        btnLaunch.setOnClickListener { performLaunchStep() }
+        btnHelp.setOnClickListener { showHelpDialog() }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = VideoListAdapter()
@@ -267,6 +268,58 @@ class SettingsActivity : AppCompatActivity() {
 
         loadAndDisplaySelectedFolder()
         loadUIFromConfig()
+    }
+
+    private fun showHelpDialog() {
+        val textView = TextView(this).apply {
+            setPadding(50, 40, 50, 40)
+            textSize = 16f
+            text = android.text.Html.fromHtml(getString(R.string.help_text), android.text.Html.FROM_HTML_MODE_COMPACT)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.help_title))
+            .setView(textView)
+            .setPositiveButton("OK", null)
+            .create()
+        
+        dialog.show()
+        tintDialogButtons(dialog)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadUIFromConfig()
+    }
+
+    private fun updateConfig(transformer: (JSONObject) -> Unit) {
+        val folder = getFolderDocumentFile() ?: return
+        val configFile = findOrCreateConfigFile(folder) ?: return
+        val json = readConfigJson(configFile) ?: JSONObject()
+        transformer(json)
+        contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
+            OutputStreamWriter(outputStream).use { writer -> writer.write(json.toString(4)) }
+        }
+        loadUIFromConfig()
+    }
+
+    private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
+        val folder = getFolderDocumentFile() ?: return
+        val configFile = findOrCreateConfigFile(folder) ?: return
+        val json = readConfigJson(configFile) ?: return
+        
+        val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
+        val items = mutableListOf<VideoItem>()
+        for (i in 0 until itemsArray.length()) {
+            items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), sessionOptions, exerciseOptions))
+        }
+        
+        val index = items.indexOfFirst { it.id == id }
+        if (index != -1) {
+            items[index] = transformer(items[index])
+            saveToConfig(folder, items)
+            loadUIFromConfig()
+        }
     }
 
     private fun performLaunchStep() {
@@ -408,10 +461,18 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this, getString(R.string.file_not_mp4), Toast.LENGTH_SHORT).show()
                 return
             }
-            val currentItems = adapter.currentList.toMutableList()
-            currentItems.add(VideoItem(id = UUID.randomUUID().toString(), fileName = name, fileSizeRaw = pickedFile.length()))
-            saveToConfig(folder, currentItems)
-            loadUIFromConfig()
+            
+            updateConfig { json ->
+                val array = json.optJSONArray("video_items") ?: JSONArray()
+                val items = mutableListOf<VideoItem>()
+                for (i in 0 until array.length()) {
+                    items.add(VideoItem.fromJson(array.getJSONObject(i), sessionOptions, exerciseOptions))
+                }
+                items.add(VideoItem(id = UUID.randomUUID().toString(), fileName = name, fileSizeRaw = pickedFile.length()))
+                val newArray = JSONArray()
+                items.forEach { newArray.put(it.toJson(sessionOptions, exerciseOptions)) }
+                json.put("video_items", newArray)
+            }
         } catch (e: Exception) { Log.e(TAG, "Add file error", e) }
     }
 
@@ -421,7 +482,13 @@ class SettingsActivity : AppCompatActivity() {
             val timeStr = String.format(Locale.US, "%02d:%02d", h, m)
             tvSetTime.text = timeStr
             lastAutoLaunchTs = 0L
-            getFolderDocumentFile()?.let { saveToConfig(it, adapter.currentList) }
+            updateConfig { json ->
+                val trainingTimeObj = JSONObject().apply {
+                    put("value", timeStr)
+                    put("last_auto_launch_ts", lastAutoLaunchTs)
+                }
+                json.put("training_time", trainingTimeObj)
+            }
         }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show()
     }
 
@@ -508,9 +575,18 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun performFullRefresh() {
         val folder = getFolderDocumentFile() ?: return
-        val currentItems = adapter.currentList
+        val configFile = findOrCreateConfigFile(folder) ?: return
+        val json = readConfigJson(configFile) ?: JSONObject()
+        
         val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
         val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
+        
+        val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
+        val currentItems = mutableListOf<VideoItem>()
+        for (i in 0 until currentItemsArray.length()) {
+            currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), sessionOptions, exerciseOptions))
+        }
+        
         val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
         val existingNames = updatedItems.map { it.fileName }.toSet()
         filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
@@ -706,18 +782,20 @@ class SettingsActivity : AppCompatActivity() {
                 fN.text = if (item.customName.isNotEmpty()) item.customName else item.fileName
                 note.text = item.note
                 fS.text = formatFileSize(item.fileSizeRaw)
-                sN.setOnClickListener { showOptionsDialog("Сеанс", sessionOptions, pos) { showAddSessionDialog(pos) } }
+                sN.setOnClickListener { showOptionsDialog("Сеанс", sessionOptions, item.id) { showAddSessionDialog(item.id) } }
                 nE.setOnClickListener { 
-                    if (getItem(pos).sessionNum.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() 
-                    else showExerciseNumPopup(pos) 
+                    val currentItem = currentList.find { it.id == item.id } ?: return@setOnClickListener
+                    if (currentItem.sessionNum.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() 
+                    else showExerciseNumPopup(item.id) 
                 }
-                eN.setOnClickListener { showOptionsDialog("Упражнение", exerciseOptions, pos) { showAddExerciseDialog(pos) } }
+                eN.setOnClickListener { showOptionsDialog("Упражнение", exerciseOptions, item.id) { showAddExerciseDialog(item.id) } }
                 nF.setOnClickListener { 
-                    if (getItem(pos).exerciseName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_exercise_first), Toast.LENGTH_SHORT).show() 
-                    else showFileNumPopup(pos) 
+                    val currentItem = currentList.find { it.id == item.id } ?: return@setOnClickListener
+                    if (currentItem.exerciseName.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_exercise_first), Toast.LENGTH_SHORT).show() 
+                    else showFileNumPopup(item.id) 
                 }
                 fN.setOnClickListener {
-                    val currentItem = getItem(pos)
+                    val currentItem = currentList.find { it.id == item.id } ?: return@setOnClickListener
                     val folder = getFolderDocumentFile()
                     val file = folder?.findFile(currentItem.fileName)
                     if (file != null) {
@@ -731,13 +809,13 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
                 fN.setOnLongClickListener { 
-                    showFileNameEditDialog(pos)
+                    showFileNameEditDialog(item.id)
                     true
                 }
-                note.setOnClickListener { showNoteEditDialog(pos) }
+                note.setOnClickListener { showNoteEditDialog(item.id) }
             }
 
-            private fun showOptionsDialog(title: String, options: MutableList<String>, pos: Int, onAdd: () -> Unit) {
+            private fun showOptionsDialog(title: String, options: MutableList<String>, id: String, onAdd: () -> Unit) {
                 val dialogView = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16) }
                 val listView = ListView(this@SettingsActivity)
                 val displayOptions = mutableListOf(getString(R.string.empty_option)); displayOptions.addAll(options)
@@ -745,14 +823,15 @@ class SettingsActivity : AppCompatActivity() {
                 listView.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
                 listView.setOnItemClickListener { _, _, i, _ ->
                     val value = if (i == 0) "" else displayOptions[i]
-                    val item = getItem(pos)
-                    if (title == "Сеанс") {
-                        val sNumStr = value.substringBefore(" ", "")
-                        val sName = value.substringAfter(" ", "")
-                        updateItem(pos, item.copy(sessionNum = sNumStr, sessionName = sName, numExercise = ""))
-                    } else { 
-                        updateItem(pos, item.copy(exerciseName = value, numFile = ""))
-                        if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000"; resetState[value] = "001" } 
+                    updateItemById(id) { item ->
+                        if (title == "Сеанс") {
+                            val sNumStr = value.substringBefore(" ", "")
+                            val sName = value.substringAfter(" ", "")
+                            item.copy(sessionNum = sNumStr, sessionName = sName, numExercise = "")
+                        } else { 
+                            if (value.isNotEmpty() && !categoryState.containsKey(value)) { categoryState[value] = "000"; resetState[value] = "001" } 
+                            item.copy(exerciseName = value, numFile = "")
+                        }
                     }
                     updateTopInputUI(); alertDialog?.dismiss()
                 }
@@ -769,7 +848,7 @@ class SettingsActivity : AppCompatActivity() {
                         leftValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v)
                             for (j in 0..999) pop.menu.add(String.format(Locale.US, "%03d", j))
-                            pop.setOnMenuItemClickListener { leftValue.text = it.title; true }; pop.show()
+                            pop.setOnMenuItemClickListener { menuItem -> leftValue.text = menuItem.title; true }; pop.show()
                         }
                         leftBox.addView(leftValue)
                         val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }
@@ -778,24 +857,30 @@ class SettingsActivity : AppCompatActivity() {
                         rightValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v)
                             pop.menu.add("000"); pop.menu.add("001")
-                            pop.setOnMenuItemClickListener { rightValue.text = it.title; true }; pop.show()
+                            pop.setOnMenuItemClickListener { menuItem -> rightValue.text = menuItem.title; true }; pop.show()
                         }
                         rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox)
                         builder.setView(layout)
                         builder.setNeutralButton("Удалить") { _, _ ->
                             options.remove(value); categoryState.remove(value); resetState.remove(value)
-                            saveAndRefresh(currentList.map { if (it.exerciseName == value) it.copy(exerciseName = "", numFile = "") else it })
+                            val folder = getFolderDocumentFile() ?: return@setNeutralButton
+                            val currentItems = currentList.map { if (it.exerciseName == value) it.copy(exerciseName = "", numFile = "") else it }
+                            saveToConfig(folder, currentItems)
+                            loadUIFromConfig()
                         }
                         builder.setPositiveButton("Сохранить") { _, _ ->
                             categoryState[value] = leftValue.text.toString(); resetState[value] = rightValue.text.toString()
-                            saveAndRefresh(currentList)
+                            loadUIFromConfig()
                         }
                     } else {
                         builder.setMessage(value).setPositiveButton("Удалить") { _, _ ->
                             options.remove(value)
                             val sNum = value.substringBefore(" ", "")
                             val sName = value.substringAfter(" ", "")
-                            saveAndRefresh(currentList.map { if (it.sessionNum == sNum && it.sessionName == sName) it.copy(sessionNum = "", sessionName = "", numExercise = "") else it })
+                            val folder = getFolderDocumentFile() ?: return@setPositiveButton
+                            val currentItems = currentList.map { if (it.sessionNum == sNum && it.sessionName == sName) it.copy(sessionNum = "", sessionName = "", numExercise = "") else it }
+                            saveToConfig(folder, currentItems)
+                            loadUIFromConfig()
                         }
                     }
                     builder.setNegativeButton("Отмена", null); val dlg = builder.create()
@@ -814,34 +899,39 @@ class SettingsActivity : AppCompatActivity() {
                 alertDialog?.window?.attributes = lp
             }
             private var alertDialog: AlertDialog? = null
-            private fun saveAndRefresh(newList: List<VideoItem>) {
-                val folder = getFolderDocumentFile() ?: return
-                saveToConfig(folder, newList); loadUIFromConfig()
-            }
-            private fun showExerciseNumPopup(pos: Int) {
+
+            private fun showExerciseNumPopup(id: String) {
+                val item = currentList.find { it.id == id } ?: return
                 val popup = PopupMenu(this@SettingsActivity, nE); popup.menu.add(getString(R.string.empty_option))
-                val currentItem = getItem(pos)
-                val used = currentList.filter { it.sessionNum == currentItem.sessionNum && it.sessionName == currentItem.sessionName && it.sessionNum.isNotEmpty() && it.exerciseName != currentItem.exerciseName }.map { it.numExercise }.toSet()
+                val used = currentList.filter { it.sessionNum == item.sessionNum && it.sessionName == item.sessionName && it.sessionNum.isNotEmpty() && it.exerciseName != item.exerciseName }.map { it.numExercise }.toSet()
                 generateFreeNumbers(used, 1, 99, "%02d").forEach { popup.menu.add(it) }
-                popup.setOnMenuItemClickListener { updateItem(pos, getItem(pos).copy(numExercise = if (it.title == getString(R.string.empty_option)) "" else it.title.toString())); updateTopInputUI(); true }
+                popup.setOnMenuItemClickListener { menuItem -> 
+                    updateItemById(id) { it.copy(numExercise = if (menuItem.title == getString(R.string.empty_option)) "" else menuItem.title.toString()) }
+                    updateTopInputUI(); true 
+                }
                 popup.applyPopupMinWidth(80); popup.show()
             }
-            private fun showFileNumPopup(pos: Int) {
+            private fun showFileNumPopup(id: String) {
+                val item = currentList.find { it.id == id } ?: return
                 val popup = PopupMenu(this@SettingsActivity, nF); popup.menu.add(getString(R.string.empty_option))
-                val used = currentList.filter { it.exerciseName == getItem(pos).exerciseName && it.exerciseName.isNotEmpty() }.map { it.numFile }.toSet()
+                val used = currentList.filter { it.exerciseName == item.exerciseName && it.exerciseName.isNotEmpty() }.map { it.numFile }.toSet()
                 generateFreeNumbers(used, 1, 999, "%03d").forEach { popup.menu.add(it) }
-                popup.setOnMenuItemClickListener { updateItem(pos, getItem(pos).copy(numFile = if (it.title == getString(R.string.empty_option)) "" else it.title.toString())); updateTopInputUI(); true }
+                popup.setOnMenuItemClickListener { menuItem ->
+                    updateItemById(id) { it.copy(numFile = if (menuItem.title == getString(R.string.empty_option)) "" else menuItem.title.toString()) }
+                    updateTopInputUI(); true 
+                }
                 popup.applyPopupMinWidth(120); popup.show()
             }
-            private fun showNoteEditDialog(pos: Int) {
-                val input = EditText(this@SettingsActivity).apply { setText(getItem(pos).note) }
+            private fun showNoteEditDialog(id: String) {
+                val item = currentList.find { it.id == id } ?: return
+                val input = EditText(this@SettingsActivity).apply { setText(item.note) }
                 val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.note_title)).setView(input)
-                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItem(pos, getItem(pos).copy(note = input.text.toString())) }
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItemById(id) { it.copy(note = input.text.toString()) } }
                     .setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
-            private fun showFileNameEditDialog(pos: Int) {
-                val item = getItem(pos)
+            private fun showFileNameEditDialog(id: String) {
+                val item = currentList.find { it.id == id } ?: return
                 val baseName = item.fileName.substringBeforeLast(".")
                 val initialText = if (item.customName.isNotEmpty()) item.customName else baseName
                 
@@ -869,14 +959,14 @@ class SettingsActivity : AppCompatActivity() {
                     .setTitle("Название")
                     .setView(layout)
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> 
-                        updateItem(pos, getItem(pos).copy(customName = input.text.toString().trim())) 
+                        updateItemById(id) { it.copy(customName = input.text.toString().trim()) } 
                     }
                     .setNegativeButton(getString(R.string.dialog_cancel), null)
                     .create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }
                 dialog.show()
             }
-            private fun showAddSessionDialog(pos: Int) {
+            private fun showAddSessionDialog(id: String) {
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }
                 var selectedNum = ""
                 val numBtn = ImageButton(this@SettingsActivity).apply { 
@@ -887,7 +977,7 @@ class SettingsActivity : AppCompatActivity() {
                 numBtn.setOnClickListener { btn ->
                     val pop = PopupMenu(this@SettingsActivity, btn); val used = sessionOptions.map { it.split(" ")[0] }.toSet()
                     for (i in 1..9) { val n = i.toString(); if (!used.contains(n)) pop.menu.add(n) }
-                    pop.setOnMenuItemClickListener { selectedNum = it.title.toString(); numDisplay.text = "Выбран № $selectedNum"; true }; pop.show()
+                    pop.setOnMenuItemClickListener { menuItem -> selectedNum = menuItem.title.toString(); numDisplay.text = "Выбран № $selectedNum"; true }; pop.show()
                 }
                 val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }
                 layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput)
@@ -897,26 +987,21 @@ class SettingsActivity : AppCompatActivity() {
                         if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show(); return@setPositiveButton }
                         val combined = "$selectedNum $name"
                         if (!sessionOptions.contains(combined)) { sessionOptions.add(combined); sessionOptions.sort() }
-                        updateItem(pos, getItem(pos).copy(sessionNum = selectedNum, sessionName = name))
+                        updateItemById(id) { it.copy(sessionNum = selectedNum, sessionName = name) }
                     }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
-            private fun showAddExerciseDialog(pos: Int) {
+            private fun showAddExerciseDialog(id: String) {
                 val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }
                 val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_exercise)).setView(input)
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ ->
                         val name = input.text.toString().trim()
                         if (name.isNotEmpty()) {
                             if (!exerciseOptions.contains(name)) { exerciseOptions.add(name); exerciseOptions.sort(); categoryState[name] = "000"; resetState[name] = "001" }
-                            updateItem(pos, getItem(pos).copy(exerciseName = name))
+                            updateItemById(id) { it.copy(exerciseName = name) }
                         }
                     }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
-            }
-            private fun updateItem(pos: Int, newItem: VideoItem) {
-                val newList = currentList.toMutableList(); newList[pos] = newItem
-                val folder = getFolderDocumentFile() ?: return
-                saveToConfig(folder, newList); loadUIFromConfig()
             }
         }
     }
