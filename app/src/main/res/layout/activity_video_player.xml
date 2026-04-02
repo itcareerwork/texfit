@@ -52,7 +52,7 @@
                 android:layout_width="5dp"
                 android:layout_height="20dp"
                 android:layout_gravity="center_horizontal|top"
-                android:background="#4CAF50" />
+                android:background="#669900" />
         </FrameLayout>
 
         <TextView

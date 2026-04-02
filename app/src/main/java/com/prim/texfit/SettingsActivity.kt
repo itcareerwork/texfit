@@ -775,7 +775,7 @@ class SettingsActivity : AppCompatActivity() {
             private val note: TextView = v.findViewById(R.id.col_note)
 
             fun bind(item: VideoItem, pos: Int) {
-                indicator.setBackgroundColor(if (item.isComplete()) 0xFF4CAF50.toInt() else 0xFFF44336.toInt())
+                indicator.setBackgroundColor(if (item.isComplete()) 0xFF99CC00.toInt() else 0xFFF44336.toInt())
                 sN.text = if (item.sessionNum.isNotEmpty()) "${item.sessionNum} ${item.sessionName}" else ""
                 nE.text = item.numExercise; eN.text = item.exerciseName
                 nF.text = item.numFile
@@ -870,6 +870,8 @@ class SettingsActivity : AppCompatActivity() {
                         }
                         builder.setPositiveButton("Сохранить") { _, _ ->
                             categoryState[value] = leftValue.text.toString(); resetState[value] = rightValue.text.toString()
+                            val folder = getFolderDocumentFile() ?: return@setPositiveButton
+                            saveToConfig(folder, currentList)
                             loadUIFromConfig()
                         }
                     } else {
@@ -1012,7 +1014,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun tintDialogButtons(dialog: AlertDialog, neutralIsDestructive: Boolean = false) {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-        if (neutralIsDestructive) dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
+ //       if (neutralIsDestructive) dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(Color.RED)
+        if (neutralIsDestructive) dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
     }
     private fun generateFreeNumbers(used: Set<String>, from: Int, to: Int, format: String): List<String> {
         val result = mutableListOf<String>()
