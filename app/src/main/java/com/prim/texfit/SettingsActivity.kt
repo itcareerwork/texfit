@@ -62,6 +62,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
 
         private fun generateId(): String = (100000..999999).random().toString()
+        private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
 
         fun applyLaunchLogic(json: JSONObject): JSONObject {
             val currStep = json.optInt("curr_step", 1)
@@ -100,6 +101,7 @@ class SettingsActivity : AppCompatActivity() {
             val sourceTable = allItems.filter { item ->
                 item.sessionId.isNotEmpty() && item.exerciseId.isNotEmpty() && item.numExercise.isNotEmpty() && item.numFile.isNotEmpty()
             }.sortedWith(compareBy(
+                { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
                 { it.numExercise.toIntOrNull() ?: 0 },
                 { it.numFile.toIntOrNull() ?: 0 }
             ))
@@ -191,6 +193,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun generateId(): String = (100000..999999).random().toString()
+    private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
 
     private lateinit var selectedFolderPathTextView: TextView
     private lateinit var recyclerView: RecyclerView
@@ -444,9 +447,13 @@ class SettingsActivity : AppCompatActivity() {
             sessionOptions = mutableListOf(); json.optJSONArray("session_options")?.let { arr ->
                 for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); sessionOptions.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
             }
+            sessionOptions.sortWith(compareBy { extractNumber(it.name) })
+
             exerciseOptions = mutableListOf(); json.optJSONArray("exercise_options")?.let { arr ->
                 for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); exerciseOptions.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
             }
+            exerciseOptions.sortWith(compareBy { extractNumber(it.name) })
+
             categoryState = mutableMapOf(); json.optJSONObject("category_state")?.let { obj -> obj.keys().forEach { key -> categoryState[key] = obj.getString(key) } }
             resetState = mutableMapOf(); json.optJSONObject("reset_state")?.let { obj -> obj.keys().forEach { key -> resetState[key] = obj.getString(key) } }
             
@@ -471,7 +478,11 @@ class SettingsActivity : AppCompatActivity() {
         filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
             updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
         }
-        val sortedItems = updatedItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }.thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it.fileName })
+        val sortedItems = updatedItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }
+            .thenBy { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") }
+            .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
+            .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
+            .thenBy { it.fileName })
         saveToConfig(folder, sortedItems); loadUIFromConfig(); Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
     }
 
@@ -507,7 +518,7 @@ class SettingsActivity : AppCompatActivity() {
     data class Timing(val time: Int, var max: Long = 0L, var curr: Long = 0L, var step: Long = 0L, var multType: Int = 0, var multVal: Int = 1, var isEnabled: Boolean = false)
 
     data class VideoItem(
-        var id: String = (100000..999999).random().toString(),
+        var id: String = generateId(),
         var sessionId: String = "", var exerciseId: String = "",
         var numExercise: String = "", var numFile: String = "", 
         var fileName: String = "", var fileSizeRaw: Long = 0, var note: String = "",
@@ -521,7 +532,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         companion object {
             fun fromJson(j: JSONObject): VideoItem {
-                val vi = VideoItem(id = j.optString("id", (100000..999999).random().toString()), sessionId = j.optString("s_id"), exerciseId = j.optString("e_id"), numExercise = j.optString("n_e"), numFile = j.optString("n_f"), fileName = j.optString("f_n"), fileSizeRaw = j.optLong("f_sz"), note = j.optString("note"), customName = j.optString("c_n"))
+                val vi = VideoItem(id = j.optString("id", generateId()), sessionId = j.optString("s_id"), exerciseId = j.optString("e_id"), numExercise = j.optString("n_e"), numFile = j.optString("n_f"), fileName = j.optString("f_n"), fileSizeRaw = j.optLong("f_sz"), note = j.optString("note"), customName = j.optString("c_n"))
                 val tArr = j.optJSONArray("timings"); if (tArr != null) for (i in 0 until tArr.length()) { val tObj = tArr.getJSONObject(i); vi.timings.add(Timing(tObj.getInt("t"), tObj.optLong("m", 0L), tObj.optLong("c", 0L), tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) }
                 return vi
             }
@@ -658,7 +669,7 @@ class SettingsActivity : AppCompatActivity() {
                     val name = nameInput.text.toString().trim()
                     if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show(); return@setPositiveButton }
                     val combined = "$selectedNum $name"; val newOption = ConfigOption(generateId(), combined)
-                    sessionOptions.add(newOption); sessionOptions.sortBy { it.name }; updateItemById(id) { it.copy(sessionId = newOption.id) }
+                    sessionOptions.add(newOption); sessionOptions.sortWith(compareBy { extractNumber(it.name) }); updateItemById(id) { it.copy(sessionId = newOption.id) }
                 }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
@@ -668,7 +679,7 @@ class SettingsActivity : AppCompatActivity() {
                     val name = input.text.toString().trim()
                     if (name.isNotEmpty()) {
                         val newOption = ConfigOption(generateId(), name)
-                        exerciseOptions.add(newOption); exerciseOptions.sortBy { it.name }
+                        exerciseOptions.add(newOption); exerciseOptions.sortWith(compareBy { extractNumber(it.name) })
                         categoryState[newOption.id] = "000"; resetState[newOption.id] = "001"
                         updateItemById(id) { it.copy(exerciseId = newOption.id) }
                     }
