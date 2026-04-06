@@ -22,6 +22,7 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -272,12 +273,27 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showHelpDialog() {
+        val scroll = ScrollView(this)
         val textView = TextView(this).apply {
-            setPadding(50, 40, 50, 40); textSize = 16f
+            setPadding(50, 40, 50, 40)
+            textSize = 14f
             text = android.text.Html.fromHtml(getString(R.string.help_text), android.text.Html.FROM_HTML_MODE_COMPACT)
         }
-        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.help_title)).setView(textView).setPositiveButton("OK", null).create()
-        dialog.show(); tintDialogButtons(dialog)
+        scroll.addView(textView)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.help_title))
+            .setView(scroll)
+            .setPositiveButton("OK", null)
+            .create()
+        
+        dialog.show()
+        val lp = WindowManager.LayoutParams()
+        lp.copyFrom(dialog.window?.attributes)
+        lp.width = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.attributes = lp
+        
+        tintDialogButtons(dialog)
     }
 
     override fun onResume() { super.onResume(); loadUIFromConfig() }
@@ -350,7 +366,8 @@ class SettingsActivity : AppCompatActivity() {
         popup.menu.add(0, 1, 0, getString(R.string.menu_folder)).setIcon(R.drawable.ic_add_folder)
         popup.menu.add(0, 2, 1, getString(R.string.menu_file)).setIcon(R.drawable.ic_add_video)
         popup.menu.add(0, 3, 2, getString(R.string.menu_refresh)).setIcon(R.drawable.ic_refresh_custom)
-        popup.menu.add(0, 4, 3, "Backup").setIcon(android.R.drawable.ic_menu_save)
+        popup.menu.add(0, 5, 3, "Сортировать").setIcon(android.R.drawable.ic_menu_sort_alphabetically).icon?.setTint(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        popup.menu.add(0, 4, 4, "Backup").setIcon(android.R.drawable.ic_menu_save)
         popup.applyPopupForceShowIcon()
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -358,6 +375,7 @@ class SettingsActivity : AppCompatActivity() {
                 2 -> selectFileLauncher.launch(arrayOf("video/mp4"))
                 3 -> performFullRefresh()
                 4 -> performBackup()
+                5 -> performSort()
             }
             true
         }
@@ -478,12 +496,24 @@ class SettingsActivity : AppCompatActivity() {
         filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
             updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
         }
-        val sortedItems = updatedItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }
+        saveToConfig(folder, updatedItems); loadUIFromConfig(); Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun performSort() {
+        val folder = getFolderDocumentFile() ?: return
+        val configFile = findOrCreateConfigFile(folder) ?: return
+        val json = readConfigJson(configFile) ?: JSONObject()
+        val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
+        val currentItems = mutableListOf<VideoItem>()
+        for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i)))
+        
+        val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }
             .thenBy { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") }
             .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
             .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
             .thenBy { it.fileName })
-        saveToConfig(folder, sortedItems); loadUIFromConfig(); Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
+            
+        saveToConfig(folder, sortedItems); loadUIFromConfig(); Toast.makeText(this, "Отсортировано", Toast.LENGTH_SHORT).show()
     }
 
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
@@ -651,8 +681,22 @@ class SettingsActivity : AppCompatActivity() {
                 val item = currentList.find { it.id == id } ?: return
                 val input = EditText(this@SettingsActivity).apply { setText(if (item.customName.isNotEmpty()) item.customName else item.fileName.substringBeforeLast(".")); hint = "Введите название"; selectAll() }
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0); addView(input); addView(TextView(this@SettingsActivity).apply { text = item.fileName; textSize = 12f; alpha = 0.6f; setPadding(0, 8, 0, 0) }) }
-                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle("Название").setView(layout).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItemById(id) { it.copy(customName = input.text.toString().trim()) } }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
-                dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
+                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle("Название").setView(layout)
+                    .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItemById(id) { it.copy(customName = input.text.toString().trim()) } }
+                    .setNegativeButton(getString(R.string.dialog_cancel), null)
+                    .setNeutralButton("Удалить") { _, _ ->
+                        updateConfig { json ->
+                            val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
+                            val newItems = JSONArray()
+                            for (i in 0 until itemsArray.length()) {
+                                val obj = itemsArray.getJSONObject(i)
+                                if (obj.optString("id") != id) newItems.put(obj)
+                            }
+                            json.put("video_items", newItems)
+                        }
+                    }
+                    .create()
+                dialog.setOnShowListener { tintDialogButtons(dialog, true) }; dialog.show()
             }
             private fun showAddSessionDialog(id: String) {
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }

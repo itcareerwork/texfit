@@ -33,9 +33,10 @@
 
                 <EditText
                     android:id="@+id/et_top_input"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="32dp"
                     android:layout_marginStart="8dp"
+                    android:layout_weight="1"
                     android:background="@android:drawable/editbox_background_normal"
                     android:focusable="false"
                     android:clickable="false"
@@ -45,6 +46,26 @@
                     android:paddingEnd="4dp"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_launch"
+                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="8dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:text="Запуск"
+                    android:textSize="10sp"
+                    android:textAllCaps="false"
+                    android:backgroundTint="@android:color/holo_green_dark"
+                    app:cornerRadius="4dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:insetLeft="0dp"
+                    android:insetRight="0dp" />
             </LinearLayout>
 
             <LinearLayout
@@ -199,26 +220,6 @@
                     android:text="00:00"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="14sp" />
-
-                <Button
-                    android:id="@+id/btn_launch"
-                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="28dp"
-                    android:layout_marginStart="16dp"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"
-                    android:minWidth="0dp"
-                    android:minHeight="0dp"
-                    android:text="Запуск"
-                    android:textSize="10sp"
-                    android:textAllCaps="false"
-                    android:backgroundTint="@android:color/holo_green_dark"
-                    app:cornerRadius="4dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:insetLeft="0dp"
-                    android:insetRight="0dp" />
 
                 <View
                     android:layout_width="0dp"

@@ -153,7 +153,8 @@ class MainActivity : AppCompatActivity() {
                     
                     val itemJson = videoItemsMap[id] ?: continue
                     val fileName = itemJson.optString("f_n")
-                    val displayName = itemJson.optString("c_n")
+                    var displayName = itemJson.optString("c_n")
+                    if (displayName.isEmpty()) displayName = fileName
 
                     if (fileName.isNotEmpty()) {
                         folder.findFile(fileName)?.uri?.let { uri ->
