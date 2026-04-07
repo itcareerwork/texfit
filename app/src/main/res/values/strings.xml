@@ -27,6 +27,11 @@
     <string name="add_folder">Добавить папку</string>
     <string name="color_indicator">Индикатор</string>
     <string name="action_settings">Настройки</string>
+    <string name="delete">Удалить</string>
+    <string name="label_position">Позиция:</string>
+    <string name="label_reset_to">Сброс на:</string>
+    <string name="dialog_title_name">Название</string>
+    <string name="session_no_not_selected">№ не выбран</string>
 
     <string name="help_title">Справка</string>
     <string name="help_text">

@@ -619,7 +619,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (title == "Упражнение") {
                         val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }
                         val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
-                        leftBox.addView(TextView(this@SettingsActivity).apply { text = "Позиция:"; textSize = 12f })
+                        leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f })
                         val leftValue = TextView(this@SettingsActivity).apply { text = categoryState[selected.id] ?: "000"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         leftValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v); for (j in 0..999) pop.menu.add(String.format(Locale.US, "%03d", j))
@@ -627,21 +627,21 @@ class SettingsActivity : AppCompatActivity() {
                         }
                         leftBox.addView(leftValue)
                         val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }
-                        rightBox.addView(TextView(this@SettingsActivity).apply { text = "Сброс на:"; textSize = 12f })
+                        rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f })
                         val rightValue = TextView(this@SettingsActivity).apply { text = resetState[selected.id] ?: "001"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         rightValue.setOnClickListener { v ->
                             val pop = PopupMenu(this@SettingsActivity, v); pop.menu.add("000"); pop.menu.add("001")
                             pop.setOnMenuItemClickListener { menuItem -> rightValue.text = menuItem.title; true }; pop.show()
                         }
                         rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
-                        builder.setNeutralButton("Удалить") { _, _ ->
+                        builder.setNeutralButton(getString(R.string.delete)) { _, _ ->
                             options.remove(selected); categoryState.remove(selected.id); resetState.remove(selected.id)
                             val folder = getFolderDocumentFile() ?: return@setNeutralButton
                             saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "") else it }); loadUIFromConfig()
                         }
                         builder.setPositiveButton("Сохранить") { _, _ -> categoryState[selected.id] = leftValue.text.toString(); resetState[selected.id] = rightValue.text.toString(); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
                     } else {
-                        builder.setMessage(selected.name).setNeutralButton("Удалить") { _, _ ->
+                        builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ ->
                             options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton
                             saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "") else it }); loadUIFromConfig()
                         }
@@ -679,12 +679,12 @@ class SettingsActivity : AppCompatActivity() {
             }
             private fun showFileNameEditDialog(id: String) {
                 val item = currentList.find { it.id == id } ?: return
-                val input = EditText(this@SettingsActivity).apply { setText(if (item.customName.isNotEmpty()) item.customName else item.fileName.substringBeforeLast(".")); hint = "Введите название"; selectAll() }
+                val input = EditText(this@SettingsActivity).apply { setText(if (item.customName.isNotEmpty()) item.customName else item.fileName.substringBeforeLast(".")); hint = getString(R.string.name_hint); selectAll() }
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0); addView(input); addView(TextView(this@SettingsActivity).apply { text = item.fileName; textSize = 12f; alpha = 0.6f; setPadding(0, 8, 0, 0) }) }
-                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle("Название").setView(layout)
+                val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.dialog_title_name)).setView(layout)
                     .setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> updateItemById(id) { it.copy(customName = input.text.toString().trim()) } }
                     .setNegativeButton(getString(R.string.dialog_cancel), null)
-                    .setNeutralButton("Удалить") { _, _ ->
+                    .setNeutralButton(getString(R.string.delete)) { _, _ ->
                         updateConfig { json ->
                             val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
                             val newItems = JSONArray()
@@ -701,7 +701,7 @@ class SettingsActivity : AppCompatActivity() {
             private fun showAddSessionDialog(id: String) {
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }
                 var selectedNum = ""
-                val numDisplay = TextView(this@SettingsActivity).apply { text = "№ не выбран"; gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }
+                val numDisplay = TextView(this@SettingsActivity).apply { text = getString(R.string.session_no_not_selected); gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }
                 val numBtn = ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_menu_sort_by_size); setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER }; setOnClickListener { btn ->
                     val pop = PopupMenu(this@SettingsActivity, btn); val used = sessionOptions.map { it.name.split(" ")[0] }.toSet()
                     for (i in 1..9) { val n = i.toString(); if (!used.contains(n)) pop.menu.add(n) }
