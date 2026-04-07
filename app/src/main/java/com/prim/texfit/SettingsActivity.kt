@@ -641,12 +641,12 @@ class SettingsActivity : AppCompatActivity() {
                         }
                         builder.setPositiveButton("Сохранить") { _, _ -> categoryState[selected.id] = leftValue.text.toString(); resetState[selected.id] = rightValue.text.toString(); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
                     } else {
-                        builder.setMessage(selected.name).setPositiveButton("Удалить") { _, _ ->
-                            options.remove(selected); val folder = getFolderDocumentFile() ?: return@setPositiveButton
+                        builder.setMessage(selected.name).setNeutralButton("Удалить") { _, _ ->
+                            options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton
                             saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "") else it }); loadUIFromConfig()
                         }
                     }
-                    builder.setNegativeButton("Отмена", null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, title == "Упражнение") }; dlg.show(); true
+                    builder.setNegativeButton("Отмена", null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
                 }
                 dialogView.addView(listView)
                 dialogView.addView(ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_input_add); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER; topMargin = 16 }; setOnClickListener { onAdd(); alertDialog?.dismiss() } })

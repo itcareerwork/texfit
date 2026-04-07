@@ -18,7 +18,7 @@
     <string name="dialog_ok">OK</string>
     <string name="dialog_cancel">Отмена</string>
     <string name="exercise_title_format">Упражнение: %s</string>
-    <string name="delete_option_title">Удалить опцию?</string>
+    <string name="delete_option_title">Удалить запись?</string>
     <string name="new_session">Новый сеанс</string>
     <string name="select_number">Выберите номер</string>
     <string name="name_hint">Введите название</string>
