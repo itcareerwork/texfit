@@ -29,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.PopupMenu
+import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -193,9 +194,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun generateId(): String = (100000..999999).random().toString()
-    private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
-
     private lateinit var selectedFolderPathTextView: TextView
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: VideoListAdapter
@@ -238,13 +236,16 @@ class SettingsActivity : AppCompatActivity() {
             }
             return intent
         }
-    }) { uri -> uri?.let { addSingleFile(it) } }
+    }) { uri -> uri?.let { addSingleFile(uri) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
+        // Инициализация тулбара (зеленой плашки)
+        val toolbar: Toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
         supportActionBar?.apply { setDisplayHomeAsUpEnabled(true); title = getString(R.string.settings_title) }
 
         selectedFolderPathTextView = findViewById(R.id.selected_folder_path_text_view)
@@ -366,8 +367,9 @@ class SettingsActivity : AppCompatActivity() {
         popup.menu.add(0, 1, 0, getString(R.string.menu_folder)).setIcon(R.drawable.ic_add_folder)
         popup.menu.add(0, 2, 1, getString(R.string.menu_file)).setIcon(R.drawable.ic_add_video)
         popup.menu.add(0, 3, 2, getString(R.string.menu_refresh)).setIcon(R.drawable.ic_refresh_custom)
-        popup.menu.add(0, 5, 3, "Сортировать").setIcon(android.R.drawable.ic_menu_sort_alphabetically).icon?.setTint(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-        popup.menu.add(0, 4, 4, "Backup").setIcon(android.R.drawable.ic_menu_save)
+        popup.menu.add(0, 5, 3, "Сортировать").setIcon(R.drawable.ic_sort_custom)
+        popup.menu.add(0, 4, 4, "Backup").setIcon(R.drawable.ic_backup_custom)
+        
         popup.applyPopupForceShowIcon()
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -530,7 +532,7 @@ class SettingsActivity : AppCompatActivity() {
             val stateObj = JSONObject(); categoryState.forEach { (k, v) -> stateObj.put(k, v) }; json.put("category_state", stateObj)
             val resetObj = JSONObject(); resetState.forEach { (k, v) -> resetObj.put(k, v) }; json.put("reset_state", resetObj)
             json.put("training_time", JSONObject().apply { put("value", tvSetTime.text.toString()); put("last_auto_launch_ts", lastAutoLaunchTs) })
-            json.put("headers", JSONObject().apply { put("col", hColor.text.toString()); put("cat1", hCat1.text.toString()); put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString()); put("size", hSize.text.toString()); put("note", hNote.text.toString()) })
+            json.put("headers", JSONObject().apply { put("col", hColor.text.toString()); put("cat1", hCat1.text.toString()); put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString()); put("size", hSize.text.toString()); put("note", hColor.text.toString()) })
             
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
         } catch (e: Exception) { Log.e(TAG, "Ошибка сохранения", e) }
