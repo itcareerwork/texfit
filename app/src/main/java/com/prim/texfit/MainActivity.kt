@@ -238,21 +238,26 @@ class MainActivity : AppCompatActivity() {
             
             holder.tvDisplayName.text = item.displayName
             
+            var retriever: MediaMetadataRetriever? = null
             try {
-                val bitmap: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    contentResolver.loadThumbnail(item.uri, Size(640, 480), null)
+                retriever = MediaMetadataRetriever()
+                retriever.setDataSource(this@MainActivity, item.uri)
+                val bitmap = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                
+                if (bitmap != null) {
+                    holder.imageView.setImageBitmap(bitmap)
                 } else {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(this@MainActivity, item.uri)
-                        retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    } finally {
-                        retriever.release()
-                    }
+                    holder.imageView.setImageResource(android.R.drawable.ic_menu_report_image)
                 }
-                holder.imageView.setImageBitmap(bitmap)
             } catch (e: Exception) {
+                Log.e(TAG, "Thumbnail error for ${item.uri}", e)
                 holder.imageView.setImageResource(android.R.drawable.ic_menu_report_image)
+            } finally {
+                try {
+                    retriever?.release()
+                } catch (ex: Exception) {
+                    // Игнорируем ошибки при освобождении
+                }
             }
 
             holder.imageView.alpha = if (item.isWatched) 0.3f else 1.0f
