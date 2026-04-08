@@ -219,41 +219,41 @@
                 android:textColor="#000000"
                 android:textSize="18sp" />
 
-            <Button
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_control_save"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="16dp"
-                android:text="Сохранить"
-                android:textSize="12sp"
-                android:backgroundTint="@android:color/holo_green_dark"
-                android:padding="0dp"
                 android:minHeight="0dp"
-                style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+                android:padding="0dp"
+                android:text="Сохранить"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                app:backgroundTint="#669900" />
 
-            <Button
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_control_delete"
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
                 android:layout_marginTop="8dp"
-                android:text="Удалить"
-                android:textSize="11sp"
-                android:backgroundTint="#80FF0000"
-                android:padding="0dp"
                 android:minHeight="0dp"
-                style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+                android:padding="0dp"
+                android:text="Удалить"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                app:backgroundTint="#CC0000" />
 
-            <Button
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_control_clear_all"
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
                 android:layout_marginTop="8dp"
-                android:text="Сброс всех"
-                android:textSize="11sp"
-                android:backgroundTint="#800000FF"
-                android:padding="0dp"
                 android:minHeight="0dp"
-                style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+                android:padding="0dp"
+                android:text="Сброс всех"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                app:backgroundTint="#1565C0" />
         </LinearLayout>
     </LinearLayout>
 
@@ -291,25 +291,31 @@
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_prev"
-            android:layout_width="60dp"
-            android:layout_height="wrap_content"
-            android:text="&lt;&lt;"
-            android:alpha="0.5" />
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@drawable/ic_skip_previous"
+            android:background="@drawable/bg_video_control"
+            android:tint="#FFFFFF"
+            android:scaleType="fitCenter"
+            android:padding="12dp"
+            android:alpha="0.8" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <!-- Секундомер внизу (увеличен) -->
+        <!-- Секундомер внизу -->
         <LinearLayout
             android:id="@+id/layout_bottom_stopwatch"
-            android:layout_width="wrap_content"
+            android:layout_width="140dp"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:gravity="center"
-            android:background="#33FFFFFF"
-            android:padding="8dp"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/bg_video_control"
+            android:padding="8dp">
             
             <TextView
                 android:id="@+id/tv_bottom_stopwatch_time"
@@ -317,28 +323,34 @@
                 android:layout_height="wrap_content"
                 android:text="00:00"
                 android:textColor="#FFFFFF"
-                android:textSize="24sp"
+                android:textSize="28sp"
                 android:textStyle="bold"
-                android:alpha="0.9" />
-                
-            <Button
-                android:id="@+id/btn_stopwatch_toggle"
-                android:layout_width="100dp"
-                android:layout_height="50dp"
-                android:text="START"
-                android:textSize="14sp"
-                android:alpha="0.7"
-                android:padding="0dp" />
+                android:alpha="1.0" />
+
+            <TextView
+                android:id="@+id/tv_stopwatch_status_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="СЕКУНДОМЕР"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:alpha="0.8"
+                android:layout_marginTop="2dp" />
         </LinearLayout>
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_next"
-            android:layout_width="60dp"
-            android:layout_height="wrap_content"
-            android:text="&gt;&gt;"
-            android:alpha="0.5" />
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@drawable/ic_skip_next"
+            android:background="@drawable/bg_video_control"
+            android:tint="#FFFFFF"
+            android:scaleType="fitCenter"
+            android:padding="12dp"
+            android:alpha="0.8" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
     </LinearLayout>
@@ -376,15 +388,19 @@
             android:paddingEnd="8dp" />
     </LinearLayout>
 
-    <Button
+    <ImageButton
         android:id="@+id/btn_stop"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
         android:layout_alignParentTop="true"
         android:layout_alignParentStart="true"
         android:layout_margin="12dp"
-        android:text="Стоп"
-        android:alpha="0.7"
+        android:src="@drawable/ic_stop_custom"
+        android:background="@drawable/bg_video_control"
+        android:tint="#FFFFFF"
+        android:scaleType="fitCenter"
+        android:padding="16dp"
+        android:alpha="0.8"
         android:visibility="gone" />
 
     <TextView

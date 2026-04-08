@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.GridLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.PopupWindow
@@ -44,9 +45,9 @@ class VideoPlayerActivity : Activity() {
     private lateinit var playerView: PlayerView
     private lateinit var player: ExoPlayer
     private lateinit var seekBar: SeekBar
-    private lateinit var btnStop: Button
-    private lateinit var btnPrev: Button
-    private lateinit var btnNext: Button
+    private lateinit var btnStop: ImageButton
+    private lateinit var btnPrev: ImageButton
+    private lateinit var btnNext: ImageButton
     private lateinit var tvTime: TextView
     private lateinit var tvExerciseCounter: TextView
     private lateinit var circularTimer: CircularProgressIndicator
@@ -58,7 +59,7 @@ class VideoPlayerActivity : Activity() {
 
     private lateinit var layoutBottomStopwatch: View
     private lateinit var tvBottomStopwatchTime: TextView
-    private lateinit var btnStopwatchToggle: Button
+    private lateinit var tvStopwatchStatusLabel: TextView
 
     // Элементы управления упражнением на экране
     private lateinit var layoutExerciseControls: View
@@ -168,7 +169,7 @@ class VideoPlayerActivity : Activity() {
 
         layoutBottomStopwatch = findViewById(R.id.layout_bottom_stopwatch)
         tvBottomStopwatchTime = findViewById(R.id.tv_bottom_stopwatch_time)
-        btnStopwatchToggle = findViewById(R.id.btn_stopwatch_toggle)
+        tvStopwatchStatusLabel = findViewById(R.id.tv_stopwatch_status_label)
 
         // Инициализация элементов управления
         layoutExerciseControls = findViewById(R.id.layout_exercise_controls)
@@ -316,25 +317,34 @@ class VideoPlayerActivity : Activity() {
         })
     }
 
+    private fun toggleStopwatch() {
+        if (stopwatchRunning) {
+            stopwatchRunning = false
+            tvStopwatchStatusLabel.text = "СЕКУНДОМЕР"
+            tvStopwatchStatusLabel.alpha = 0.7f
+        } else {
+            stopwatchBaseTime = SystemClock.elapsedRealtime()
+            stopwatchRunning = true
+            tvStopwatchStatusLabel.text = "СТОП"
+            tvStopwatchStatusLabel.alpha = 1.0f
+        }
+    }
+
+    private fun resetStopwatch() {
+        stopwatchBaseTime = SystemClock.elapsedRealtime()
+        if (!stopwatchRunning) {
+            tvBottomStopwatchTime.text = "00:00"
+        }
+    }
+
     private fun setupStopwatch() {
         layoutBottomStopwatch.visibility = if (isStopwatchVisible) View.VISIBLE else View.GONE
-        btnStopwatchToggle.setOnClickListener {
-            if (stopwatchRunning) {
-                stopwatchRunning = false
-                btnStopwatchToggle.text = "СЕКУНДОМЕР"
-            } else {
-                stopwatchBaseTime = SystemClock.elapsedRealtime()
-                stopwatchRunning = true
-                btnStopwatchToggle.text = "СТОП"
-            }
-        }
-        btnStopwatchToggle.setOnLongClickListener {
-            stopwatchBaseTime = SystemClock.elapsedRealtime()
-            if (!stopwatchRunning) {
-                tvBottomStopwatchTime.text = "00:00"
-            }
-            true
-        }
+        
+        val onToggle = View.OnClickListener { toggleStopwatch() }
+        val onReset = View.OnLongClickListener { resetStopwatch(); true }
+
+        layoutBottomStopwatch.setOnClickListener(onToggle)
+        layoutBottomStopwatch.setOnLongClickListener(onReset)
     }
 
     private fun setupExerciseControls() {
