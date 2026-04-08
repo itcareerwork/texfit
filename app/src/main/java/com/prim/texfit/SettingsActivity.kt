@@ -532,7 +532,7 @@ class SettingsActivity : AppCompatActivity() {
             val stateObj = JSONObject(); categoryState.forEach { (k, v) -> stateObj.put(k, v) }; json.put("category_state", stateObj)
             val resetObj = JSONObject(); resetState.forEach { (k, v) -> resetObj.put(k, v) }; json.put("reset_state", resetObj)
             json.put("training_time", JSONObject().apply { put("value", tvSetTime.text.toString()); put("last_auto_launch_ts", lastAutoLaunchTs) })
-            json.put("headers", JSONObject().apply { put("col", hColor.text.toString()); put("cat1", hCat1.text.toString()); put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString()); put("size", hSize.text.toString()); put("note", hColor.text.toString()) })
+            json.put("headers", JSONObject().apply { put("col", hColor.text.toString()); put("cat1", hCat1.text.toString()); put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString()); put("size", hSize.text.toString()); put("note", hNote.text.toString()) })
             
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
         } catch (e: Exception) { Log.e(TAG, "Ошибка сохранения", e) }

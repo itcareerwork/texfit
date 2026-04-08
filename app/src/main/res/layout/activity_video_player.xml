@@ -376,16 +376,6 @@
             android:background="#40000000"
             android:paddingStart="12dp"
             android:paddingEnd="12dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ПРОДОЛЖИТЬ"
-            android:textColor="#CCCCCC"
-            android:textSize="14sp"
-            android:background="#40000000"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp" />
     </LinearLayout>
 
     <ImageButton
