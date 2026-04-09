@@ -28,7 +28,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.appcompat.widget.PopupMenu
+import androidx.appcompat.widget.ListPopupWindow
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
@@ -45,7 +45,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.system.exitProcess
@@ -243,7 +242,6 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
-        // Инициализация тулбара (зеленой плашки)
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.apply { setDisplayHomeAsUpEnabled(true); title = getString(R.string.settings_title) }
@@ -363,25 +361,41 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showAddMenu(view: View) {
-        val popup = PopupMenu(this, view)
-        popup.menu.add(0, 1, 0, getString(R.string.menu_folder)).setIcon(R.drawable.ic_add_folder)
-        popup.menu.add(0, 2, 1, getString(R.string.menu_file)).setIcon(R.drawable.ic_add_video)
-        popup.menu.add(0, 3, 2, getString(R.string.menu_refresh)).setIcon(R.drawable.ic_refresh_custom)
-        popup.menu.add(0, 5, 3, "Сортировать").setIcon(R.drawable.ic_sort_custom)
-        popup.menu.add(0, 4, 4, "Backup").setIcon(R.drawable.ic_backup_custom)
-        
-        popup.applyPopupForceShowIcon()
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
+        val items = listOf(
+            Triple(1, getString(R.string.menu_folder), R.drawable.ic_add_folder),
+            Triple(2, getString(R.string.menu_file), R.drawable.ic_add_video),
+            Triple(3, getString(R.string.menu_refresh), R.drawable.ic_refresh_custom),
+            Triple(5, "Сортировать", R.drawable.ic_sort_custom),
+            Triple(4, "Backup", R.drawable.ic_backup_custom)
+        )
+
+        val adapter = object : ArrayAdapter<Triple<Int, String, Int>>(this, android.R.layout.select_dialog_item, items) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getView(position, convertView, parent) as TextView
+                val item = getItem(position)!!
+                v.text = item.second
+                v.setCompoundDrawablesWithIntrinsicBounds(item.third, 0, 0, 0)
+                v.compoundDrawablePadding = (16 * resources.displayMetrics.density).toInt()
+                return v
+            }
+        }
+
+        val listPopup = ListPopupWindow(this)
+        listPopup.setAdapter(adapter)
+        listPopup.anchorView = view
+        listPopup.width = (220 * resources.displayMetrics.density).toInt()
+        listPopup.isModal = true
+        listPopup.setOnItemClickListener { _, _, position, _ ->
+            when (items[position].first) {
                 1 -> selectFolderLauncher.launch(null)
                 2 -> selectFileLauncher.launch(arrayOf("video/mp4"))
                 3 -> performFullRefresh()
                 4 -> showBackupOptionsDialog()
                 5 -> performSort()
             }
-            true
+            listPopup.dismiss()
         }
-        popup.show()
+        listPopup.show()
     }
 
     private fun showBackupOptionsDialog() {
@@ -494,7 +508,8 @@ class SettingsActivity : AppCompatActivity() {
             
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
-                hColor.text = headersJson.optString("col", "Цвет"); hCat1.text = headersJson.optString("cat1", "Сеанс")
+                // hColor.text = headersJson.optString("col", "▼") // Заменяем "Цвет" на стрелку
+                hCat1.text = headersJson.optString("cat1", "Сеанс")
                 hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Название")
                 hSize.text = headersJson.optString("size", "Размер"); hNote.text = headersJson.optString("note", "Прим.")
             }
@@ -659,16 +674,24 @@ class SettingsActivity : AppCompatActivity() {
                         leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f })
                         val leftValue = TextView(this@SettingsActivity).apply { text = categoryState[selected.id] ?: "000"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         leftValue.setOnClickListener { v ->
-                            val pop = PopupMenu(this@SettingsActivity, v); for (j in 0..999) pop.menu.add(String.format(Locale.US, "%03d", j))
-                            pop.setOnMenuItemClickListener { menuItem -> leftValue.text = menuItem.title; true }; pop.show()
+                            val optionsList = (0..999).map { String.format(Locale.US, "%03d", it) }
+                            val listPopup = ListPopupWindow(this@SettingsActivity)
+                            listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList))
+                            listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt()
+                            listPopup.setOnItemClickListener { _, _, pos, _ -> leftValue.text = optionsList[pos]; listPopup.dismiss() }
+                            listPopup.show()
                         }
                         leftBox.addView(leftValue)
                         val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }
                         rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f })
                         val rightValue = TextView(this@SettingsActivity).apply { text = resetState[selected.id] ?: "001"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }
                         rightValue.setOnClickListener { v ->
-                            val pop = PopupMenu(this@SettingsActivity, v); pop.menu.add("000"); pop.menu.add("001")
-                            pop.setOnMenuItemClickListener { menuItem -> rightValue.text = menuItem.title; true }; pop.show()
+                            val optionsList = listOf("000", "001")
+                            val listPopup = ListPopupWindow(this@SettingsActivity)
+                            listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList))
+                            listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt()
+                            listPopup.setOnItemClickListener { _, _, pos, _ -> rightValue.text = optionsList[pos]; listPopup.dismiss() }
+                            listPopup.show()
                         }
                         rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
                         builder.setNeutralButton(getString(R.string.delete)) { _, _ ->
@@ -694,20 +717,40 @@ class SettingsActivity : AppCompatActivity() {
 
             private fun showExerciseNumPopup(id: String) {
                 val item = currentList.find { it.id == id } ?: return
-                val popup = PopupMenu(this@SettingsActivity, nE); popup.menu.add(getString(R.string.empty_option))
                 val used = currentList.filter { it.sessionId == item.sessionId && it.sessionId.isNotEmpty() && it.exerciseId != item.exerciseId }.map { it.numExercise }.toSet()
-                generateFreeNumbers(used, 1, 99, "%02d").forEach { popup.menu.add(it) }
-                popup.setOnMenuItemClickListener { menuItem -> updateItemById(id) { it.copy(numExercise = if (menuItem.title == getString(R.string.empty_option)) "" else menuItem.title.toString()) }; true }
-                popup.applyPopupMinWidth(80); popup.show()
+                val options = mutableListOf(getString(R.string.empty_option))
+                options.addAll(generateFreeNumbers(used, 1, 99, "%02d"))
+
+                val listPopup = ListPopupWindow(this@SettingsActivity)
+                listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, options))
+                listPopup.anchorView = nE; listPopup.width = (100 * resources.displayMetrics.density).toInt()
+                listPopup.isModal = true
+                listPopup.setOnItemClickListener { _, _, position, _ ->
+                    val selected = options[position]
+                    updateItemById(id) { it.copy(numExercise = if (selected == getString(R.string.empty_option)) "" else selected) }
+                    listPopup.dismiss()
+                }
+                listPopup.show()
             }
+
             private fun showFileNumPopup(id: String) {
                 val item = currentList.find { it.id == id } ?: return
-                val popup = PopupMenu(this@SettingsActivity, nF); popup.menu.add(getString(R.string.empty_option))
                 val used = currentList.filter { it.exerciseId == item.exerciseId && it.exerciseId.isNotEmpty() }.map { it.numFile }.toSet()
-                generateFreeNumbers(used, 1, 999, "%03d").forEach { popup.menu.add(it) }
-                popup.setOnMenuItemClickListener { menuItem -> updateItemById(id) { it.copy(numFile = if (menuItem.title == getString(R.string.empty_option)) "" else menuItem.title.toString()) }; true }
-                popup.applyPopupMinWidth(120); popup.show()
+                val options = mutableListOf(getString(R.string.empty_option))
+                options.addAll(generateFreeNumbers(used, 1, 999, "%03d"))
+
+                val listPopup = ListPopupWindow(this@SettingsActivity)
+                listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, options))
+                listPopup.anchorView = nF; listPopup.width = (120 * resources.displayMetrics.density).toInt()
+                listPopup.isModal = true
+                listPopup.setOnItemClickListener { _, _, position, _ ->
+                    val selected = options[position]
+                    updateItemById(id) { it.copy(numFile = if (selected == getString(R.string.empty_option)) "" else selected) }
+                    listPopup.dismiss()
+                }
+                listPopup.show()
             }
+
             private fun showNoteEditDialog(id: String) {
                 val item = currentList.find { it.id == id } ?: return
                 val input = EditText(this@SettingsActivity).apply { setText(item.note) }
@@ -740,9 +783,13 @@ class SettingsActivity : AppCompatActivity() {
                 var selectedNum = ""
                 val numDisplay = TextView(this@SettingsActivity).apply { text = getString(R.string.session_no_not_selected); gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }
                 val numBtn = ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_menu_sort_by_size); setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER }; setOnClickListener { btn ->
-                    val pop = PopupMenu(this@SettingsActivity, btn); val used = sessionOptions.map { it.name.split(" ")[0] }.toSet()
-                    for (i in 1..9) { val n = i.toString(); if (!used.contains(n)) pop.menu.add(n) }
-                    pop.setOnMenuItemClickListener { menuItem -> selectedNum = menuItem.title.toString(); numDisplay.text = "Выбран № $selectedNum"; true }; pop.show()
+                    val used = sessionOptions.map { it.name.split(" ")[0] }.toSet()
+                    val available = (1..9).map { it.toString() }.filter { !used.contains(it) }
+                    val listPopup = ListPopupWindow(this@SettingsActivity)
+                    listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, available))
+                    listPopup.anchorView = btn; listPopup.width = (80 * resources.displayMetrics.density).toInt()
+                    listPopup.setOnItemClickListener { _, _, pos, _ -> selectedNum = available[pos]; numDisplay.text = "Выбран № $selectedNum"; listPopup.dismiss() }
+                    listPopup.show()
                 } }
                 val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }
                 layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput)
@@ -784,6 +831,4 @@ class SettingsActivity : AppCompatActivity() {
     private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? = findConfigFileForRead(folder) ?: folder.createFile("application/json", CONFIG_FILE_NAME)
 }
 
-private fun PopupMenu.applyPopupMinWidth(widthPx: Int) { try { val mPopupField = this.javaClass.getDeclaredField("mPopup").apply { isAccessible = true }; val menuPopupHelper = mPopupField.get(this) ?: return; menuPopupHelper.javaClass.getDeclaredMethod("setMinWidth", Int::class.java).invoke(menuPopupHelper, widthPx) } catch (e: Exception) { Log.e("SettingsActivity", "Popup width error", e) } }
-private fun PopupMenu.applyPopupForceShowIcon() { try { val mPopupField = this.javaClass.getDeclaredField("mPopup").apply { isAccessible = true }; val menuPopupHelper = mPopupField.get(this) ?: return; menuPopupHelper.javaClass.getDeclaredMethod("setForceShowIcon", Boolean::class.java).invoke(menuPopupHelper, true) } catch (e: Exception) { Log.e("SettingsActivity", "Popup icon error", e) } }
 class VideoItemDiffCallback : DiffUtil.ItemCallback<SettingsActivity.VideoItem>() { override fun areItemsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem.id == newItem.id; override fun areContentsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem == newItem }
