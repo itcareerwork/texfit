@@ -376,12 +376,47 @@ class SettingsActivity : AppCompatActivity() {
                 1 -> selectFolderLauncher.launch(null)
                 2 -> selectFileLauncher.launch(arrayOf("video/mp4"))
                 3 -> performFullRefresh()
-                4 -> performBackup()
+                4 -> showBackupOptionsDialog()
                 5 -> performSort()
             }
             true
         }
         popup.show()
+    }
+
+    private fun showBackupOptionsDialog() {
+        val options = arrayOf("Создать бэкап", "Восстановить из существующих")
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Backup")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> performBackup()
+                    1 -> showRestoreDialog()
+                }
+            }
+            .setNegativeButton("Отмена", null)
+        val dialog = builder.create()
+        dialog.show()
+        tintDialogButtons(dialog)
+    }
+
+    private fun showRestoreDialog() {
+        val folder = getFolderDocumentFile() ?: return
+        val backupFiles = folder.listFiles()
+            .filter { it.name?.endsWith(".backup") == true }
+            .sortedByDescending { it.lastModified() }
+        if (backupFiles.isEmpty()) {
+            Toast.makeText(this, "Бэкапы не найдены", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val names = backupFiles.map { it.name ?: "Unnamed" }.toTypedArray()
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Выберите файл")
+            .setItems(names) { _, which -> restoreBackup(backupFiles[which]) }
+            .setNegativeButton("Отмена", null)
+        val dialog = builder.create()
+        dialog.show()
+        tintDialogButtons(dialog)
     }
 
     private fun performBackup() {

@@ -17,7 +17,8 @@
         android:layout_height="match_parent"
         android:layout_above="@+id/seek_bar"
         android:clickable="true"
-        android:focusable="true" />
+        android:focusable="true"
+        android:contentDescription="Область клика для управления" />
 
     <!-- Счетчик упражнений с круговым таймером (верхний правый) -->
     <FrameLayout
@@ -297,10 +298,11 @@
             android:layout_height="64dp"
             android:src="@drawable/ic_skip_previous"
             android:background="@drawable/bg_video_control"
-            android:tint="#FFFFFF"
+            app:tint="#FFFFFF"
             android:scaleType="fitCenter"
             android:padding="12dp"
-            android:alpha="0.8" />
+            android:alpha="0.8"
+            android:contentDescription="Предыдущий отрезок" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
@@ -347,10 +349,11 @@
             android:layout_height="64dp"
             android:src="@drawable/ic_skip_next"
             android:background="@drawable/bg_video_control"
-            android:tint="#FFFFFF"
+            app:tint="#FFFFFF"
             android:scaleType="fitCenter"
             android:padding="12dp"
-            android:alpha="0.8" />
+            android:alpha="0.8"
+            android:contentDescription="Следующий отрезок" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
     </LinearLayout>
@@ -387,11 +390,12 @@
         android:layout_margin="12dp"
         android:src="@drawable/ic_stop_custom"
         android:background="@drawable/bg_video_control"
-        android:tint="#FFFFFF"
+        app:tint="#FFFFFF"
         android:scaleType="fitCenter"
         android:padding="16dp"
         android:alpha="0.8"
-        android:visibility="gone" />
+        android:visibility="gone"
+        android:contentDescription="Остановить" />
 
     <TextView
         android:id="@+id/tv_time"
