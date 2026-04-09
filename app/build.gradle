@@ -17,12 +17,32 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    getProperty("archivesBaseName") // для старых версий или:
+    base {
+        archivesName = "texfit-v${defaultConfig.versionName}"
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
+            // "Уборка мусора" и сжатие:
+            minifyEnabled true //  неиспользуемый код (R8)
+            shrinkResources true //  неиспользуемые ресурсы
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            //  версии в имя APK
+            applicationVariants.all { variant ->
+                variant.outputs.all {
+                    outputFileName = "texfit-v${variant.versionName}.apk"
+                }
+            }
+        }
+        debug {
+            // Для отладки обычно сжатие отключают, чтобы сборка шла быстрее
+            minifyEnabled false
+            shrinkResources false
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
