@@ -13,23 +13,31 @@ android {
         targetSdk 36
         versionCode 1
         versionName "1.0"
-
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    getProperty("archivesBaseName") // для старых версий или:
+    // В новых версиях Studio галочки исчезли. Мы прописываем их здесь.
+    // Пароли НЕ пишем — Studio сама подставит их из вашего окна ввода при сборке.
+    signingConfigs {
+        release {
+            v1SigningEnabled true
+            v2SigningEnabled true 
+        }
+    }
+
     base {
         archivesName = "texfit-v${defaultConfig.versionName}"
     }
 
     buildTypes {
         release {
-            // "Уборка мусора" и сжатие:
-            minifyEnabled true //  неиспользуемый код (R8)
-            shrinkResources true //  неиспользуемые ресурсы
+            // Привязываем настройки подписи (V1+V2)
+            signingConfig signingConfigs.release
+            
+            minifyEnabled true 
+            shrinkResources true 
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 
-            //  версии в имя APK
             applicationVariants.all { variant ->
                 variant.outputs.all {
                     outputFileName = "texfit-v${variant.versionName}.apk"
@@ -37,7 +45,6 @@ android {
             }
         }
         debug {
-            // Для отладки обычно сжатие отключают, чтобы сборка шла быстрее
             minifyEnabled false
             shrinkResources false
         }
