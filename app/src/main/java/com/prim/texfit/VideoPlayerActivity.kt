@@ -75,7 +75,7 @@ class VideoPlayerActivity : Activity() {
     private lateinit var tvControlMult: TextView
     private lateinit var btnControlSave: Button
     private lateinit var btnControlDelete: Button
-    private lateinit var btnControlClearAll: Button
+    private lateinit var btnControlGeneralSettings: Button
 
     private var videoItemId: String = ""
     private var videoFileName: String = ""
@@ -176,16 +176,16 @@ class VideoPlayerActivity : Activity() {
         tvControlSegmentLabel = findViewById(R.id.tv_control_segment_label)
         swExerciseEnabled = findViewById(R.id.sw_exercise_enabled)
         layoutSettingsFields = findViewById(R.id.layout_settings_fields)
-        
+
         tvControlMaxMin = findViewById(R.id.tv_control_max_min)
         tvControlMaxSec = findViewById(R.id.tv_control_max_sec)
         tvControlStepMin = findViewById(R.id.tv_control_step_min)
         tvControlStepSec = findViewById(R.id.tv_control_step_sec)
-        
+
         tvControlMult = findViewById(R.id.tv_control_mult)
         btnControlSave = findViewById(R.id.btn_control_save)
         btnControlDelete = findViewById(R.id.btn_control_delete)
-        btnControlClearAll = findViewById(R.id.btn_control_clear_all)
+        btnControlGeneralSettings = findViewById(R.id.btn_control_general_settings)
 
         // Возвращаем цвета переключателя
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
@@ -339,7 +339,7 @@ class VideoPlayerActivity : Activity() {
 
     private fun setupStopwatch() {
         layoutBottomStopwatch.visibility = if (isStopwatchVisible) View.VISIBLE else View.GONE
-        
+
         val onToggle = View.OnClickListener { toggleStopwatch() }
         val onReset = View.OnLongClickListener { resetStopwatch(); true }
 
@@ -366,13 +366,13 @@ class VideoPlayerActivity : Activity() {
                 return@setOnClickListener
             }
             val pop = PopupMenu(this, v)
-            pop.menu.add("Пусто"); pop.menu.add("№ файла $fileNumForDisplay")
+            pop.menu.add("--"); pop.menu.add("№ файла $fileNumForDisplay")
             val subMenu = pop.menu.addSubMenu("1-10")
             for (i in 1..10) subMenu.add("x$i")
             pop.setOnMenuItemClickListener { item ->
                 val title = item.title.toString()
                 when {
-                    title == "Пусто" -> { pendingMultType = 0; pendingMultVal = 1; tvControlMult.text = "Пусто" }
+                    title == "--" -> { pendingMultType = 0; pendingMultVal = 1; tvControlMult.text = "--" }
                     title.startsWith("№ файла") -> { pendingMultType = 2; pendingMultVal = 1; tvControlMult.text = "№ файла $fileNumForDisplay" }
                     title.startsWith("x") -> {
                         pendingMultType = 1
@@ -388,7 +388,7 @@ class VideoPlayerActivity : Activity() {
         btnControlSave.setOnClickListener {
             val pos = player.currentPosition.toInt()
             val target = findOrAddTiming(pos)
-            
+
             target.isEnabled = pendingEnabled
             target.max = getMsFromUI(isMax = true)
             target.step = getMsFromUI(isMax = false)
@@ -403,13 +403,13 @@ class VideoPlayerActivity : Activity() {
                 // Установка: записываем -1 как маркер "Установлено"
                 target.curr = -1L
             }
-            
+
             saveTimingsToConfig()
             drawTicks(player.duration.toInt())
             resetTaskTimer()
             updateUIState()
             updateExerciseControlsUI()
-            
+
             Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
         }
 
@@ -427,16 +427,7 @@ class VideoPlayerActivity : Activity() {
             }
         }
 
-        btnControlClearAll.setOnClickListener {
-            timings.clear()
-            addDefaultTimings(player.duration.toInt())
-            saveTimingsToConfig()
-            drawTicks(player.duration.toInt())
-            resetTaskTimer()
-            updateUIState()
-            updateExerciseControlsUI()
-            Toast.makeText(this, "Тайминги сброшены", Toast.LENGTH_SHORT).show()
-        }
+        btnControlGeneralSettings.setOnClickListener { showGeneralSettingsPopup(it) }
     }
 
     private fun getMsFromUI(isMax: Boolean = true): Long {
@@ -530,6 +521,61 @@ class VideoPlayerActivity : Activity() {
         popup?.showAsDropDown(target)
     }
 
+    private fun showGeneralSettingsPopup(anchor: View) {
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(Color.parseColor("#E0000000"))
+        }
+
+        fun createPopupBtn(label: String, color: Int, onClick: () -> Unit): Button {
+            return Button(this).apply {
+                text = label
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg)
+                backgroundTintList = ColorStateList.valueOf(color)
+                setOnClickListener {
+                    onClick()
+                    popup?.dismiss()
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    (42 * resources.displayMetrics.density).toInt()
+                ).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() }
+            }
+        }
+
+        dialogView.addView(createPopupBtn("Сбросить все", Color.parseColor("#F57C00")) {
+            timings.forEach { t ->
+                if (currStepConfig == 1) {
+                    t.curr = if (t.step > 0) -t.step else 0L
+                } else {
+                    t.curr = -1L
+                }
+            }
+            saveTimingsToConfig()
+            resetTaskTimer()
+            updateUIState()
+            updateExerciseControlsUI()
+            Toast.makeText(this, "Все тайминги сброшены", Toast.LENGTH_SHORT).show()
+        })
+
+        dialogView.addView(createPopupBtn("Удалить все", Color.parseColor("#1565C0")) {
+            timings.clear()
+            addDefaultTimings(player.duration.toInt())
+            saveTimingsToConfig()
+            drawTicks(player.duration.toInt())
+            resetTaskTimer()
+            updateUIState()
+            updateExerciseControlsUI()
+            Toast.makeText(this, "Тайминги удалены", Toast.LENGTH_SHORT).show()
+        })
+
+        popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        popup?.showAsDropDown(anchor)
+    }
+
     private fun setFieldsFromMs(ms: Long, tvMin: TextView, tvSec: TextView) {
         val totalSec = ms / 1000
         val m = (totalSec / 60).toInt()
@@ -581,7 +627,7 @@ class VideoPlayerActivity : Activity() {
         tvControlMult.text = when(pendingMultType) {
             1 -> "x$pendingMultVal"
             2 -> "№ файла $fileNumForDisplay"
-            else -> "Пусто"
+            else -> "--"
         }
         
         updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0)

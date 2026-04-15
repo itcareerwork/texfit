@@ -216,45 +216,55 @@
                 android:layout_height="42dp"
                 android:background="@android:drawable/editbox_background_normal"
                 android:gravity="center"
-                android:text="Пусто"
+                android:text="--"
                 android:textColor="#000000"
                 android:textSize="18sp" />
 
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btn_control_save"
+            <!-- Кнопки Сохранить и Удалить рядом -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="16dp"
-                android:minHeight="0dp"
-                android:padding="0dp"
-                android:text="Сохранить"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                app:backgroundTint="#669900" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp">
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/btn_control_save"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text="Сохранить"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    app:backgroundTint="#669900" />
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="0dp" />
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/btn_control_delete"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text="Удалить"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    app:backgroundTint="#CC0000" />
+            </LinearLayout>
 
+            <!-- Общие настройки -->
             <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btn_control_delete"
+                android:id="@+id/btn_control_general_settings"
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
                 android:layout_marginTop="8dp"
                 android:minHeight="0dp"
                 android:padding="0dp"
-                android:text="Удалить"
+                android:text="Общие настройки"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
-                app:backgroundTint="#CC0000" />
-
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btn_control_clear_all"
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:layout_marginTop="8dp"
-                android:minHeight="0dp"
-                android:padding="0dp"
-                android:text="Сброс всех"
-                android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                app:backgroundTint="#1565C0" />
+                app:backgroundTint="#757575" />
         </LinearLayout>
     </LinearLayout>
 
