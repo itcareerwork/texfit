@@ -71,6 +71,20 @@
     <string name="btn_general_settings">Общие настройки</string>
     <string name="switch_enable">Включить</string>
 
+    <string name="error_permission">Ошибка прав</string>
+    <string name="error_loading">Ошибка загрузки</string>
+    <string name="error_reading">Ошибка чтения</string>
+    <string name="error_saving">Ошибка сохранения</string>
+    <string name="error_playlist_loading">Ошибка загрузки плейлиста</string>
+    <string name="error_status_saving">Ошибка сохранения статуса</string>
+    
+    <string name="unit_b">Б</string>
+    <string name="unit_kb">КБ</string>
+    <string name="unit_mb">МБ</string>
+    <string name="unit_gb">ГБ</string>
+    <string name="unit_tb">ТБ</string>
+    <string name="unnamed">Без имени</string>
+
     <string name="help_title">Справка</string>
     <string name="help_text">
 &lt;br&gt;
@@ -129,9 +143,5 @@
         &lt;br&gt; \t - открыть файл &lt;b&gt; texfit.cfg &lt;/b&gt; в любом текстовом редакторе на телефоне
         &lt;br&gt; \t - найти строку &lt;b&gt; ["button": 0] &lt;/b&gt;, выставить &lt;b&gt; ["button": 1] &lt;/b&gt;
         &lt;br&gt; \t - сохранить файл и выйти. В приложении в Окне настроек сверху появится кнопка &lt;b&gt; Запуск &lt;/b&gt;
-
-
-
-
     </string>
 </resources>

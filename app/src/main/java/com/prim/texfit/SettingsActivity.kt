@@ -223,7 +223,7 @@ class SettingsActivity : AppCompatActivity() {
                 saveSelectedFolderUri(it)
                 displaySelectedFolder(it)
                 loadUIFromConfig()
-            } catch (e: Exception) { Log.e(TAG, "Ошибка прав", e) }
+            } catch (e: Exception) { Log.e(TAG, getString(R.string.error_permission), e) }
         }
     }
 
@@ -339,7 +339,13 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun formatFileSize(size: Long): String {
         if (size <= 0) return ""
-        val units = arrayOf("Б", "КБ", "МБ", "ГБ", "ТБ")
+        val units = arrayOf(
+            getString(R.string.unit_b),
+            getString(R.string.unit_kb),
+            getString(R.string.unit_mb),
+            getString(R.string.unit_gb),
+            getString(R.string.unit_tb)
+        )
         val digitGroups = (log10(size.toDouble()) / log10(1024.0)).toInt().coerceIn(0, units.size - 1)
         return String.format(Locale.US, "%.1f %s", size / 1024.0.pow(digitGroups.toDouble()), units[digitGroups])
     }
@@ -423,7 +429,7 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.backup_not_found), Toast.LENGTH_SHORT).show()
             return
         }
-        val names = backupFiles.map { it.name ?: "Unnamed" }.toTypedArray()
+        val names = backupFiles.map { it.name ?: getString(R.string.unnamed) }.toTypedArray()
         val builder = AlertDialog.Builder(this)
             .setTitle(getString(R.string.backup_select_file))
             .setItems(names) { _, which -> restoreBackup(backupFiles[which]) }
@@ -473,7 +479,7 @@ class SettingsActivity : AppCompatActivity() {
                 items.forEach { newArray.put(it.toJson()) }
                 json.put("video_items", newArray)
             }
-        } catch (e: Exception) { Log.e(TAG, "Add file error", e) }
+        } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
     }
 
     private fun showTimePicker() {
@@ -508,7 +514,6 @@ class SettingsActivity : AppCompatActivity() {
             
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
-                // hColor.text = headersJson.optString("col", "▼") // Заменяем "Цвет" на стрелку
                 hCat1.text = headersJson.optString("cat1", getString(R.string.header_session))
                 hCat2.text = headersJson.optString("cat2", getString(R.string.header_exercise))
                 hCat3.text = headersJson.optString("cat3", getString(R.string.header_name))
@@ -533,7 +538,7 @@ class SettingsActivity : AppCompatActivity() {
             val array = json.optJSONArray("video_items") ?: JSONArray(); val items = mutableListOf<VideoItem>()
             for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i)))
             adapter.submitList(items); updateTopInputUI(items)
-        } catch (e: Exception) { Log.e(TAG, "Ошибка загрузки", e) }
+        } catch (e: Exception) { Log.e(TAG, getString(R.string.error_loading), e) }
     }
 
     private fun performFullRefresh() {
@@ -587,7 +592,7 @@ class SettingsActivity : AppCompatActivity() {
             json.put("headers", JSONObject().apply { put("col", hColor.text.toString()); put("cat1", hCat1.text.toString()); put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString()); put("size", hSize.text.toString()); put("note", hNote.text.toString()) })
             
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
-        } catch (e: Exception) { Log.e(TAG, "Ошибка сохранения", e) }
+        } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean { menuInflater.inflate(R.menu.settings_menu, menu); return true }
@@ -819,7 +824,7 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     private fun getFolderDocumentFile(): DocumentFile? = getFolderUri()?.let { DocumentFile.fromTreeUri(this, it) }
-    private fun readConfigJson(configFile: DocumentFile): JSONObject? = try { contentResolver.openInputStream(configFile.uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) } } catch (e: Exception) { Log.e(TAG, "Ошибка чтения", e); null }
+    private fun readConfigJson(configFile: DocumentFile): JSONObject? = try { contentResolver.openInputStream(configFile.uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) } } catch (e: Exception) { Log.e(TAG, getString(R.string.error_reading), e); null }
     private fun tintDialogButtons(dialog: AlertDialog, neutralIsDestructive: Boolean = false) {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))

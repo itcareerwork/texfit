@@ -170,7 +170,7 @@ class MainActivity : AppCompatActivity() {
                 adapter.submitList(playlist)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка загрузки плейлиста", e)
+            Log.e(TAG, getString(R.string.error_playlist_loading), e)
         }
     }
 
@@ -200,7 +200,7 @@ class MainActivity : AppCompatActivity() {
             }
             loadPlaylistFromConfig()
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка сохранения статуса", e)
+            Log.e(TAG, getString(R.string.error_status_saving), e)
         }
     }
 
