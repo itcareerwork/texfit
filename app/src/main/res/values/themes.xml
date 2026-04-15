@@ -13,4 +13,9 @@
         <item name="android:statusBarColor">@android:color/holo_green_dark</item>
         <!-- Customize your theme here. -->
     </style>
+
+    <style name="Theme.Texfit.Fullscreen" parent="Theme.Texfit">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
 </resources>

@@ -30,7 +30,8 @@
             android:name=".VideoPlayerActivity"
             android:exported="false"
             android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize" />
+            android:configChanges="orientation|screenSize"
+            android:theme="@style/Theme.Texfit.Fullscreen" />
 
     </application>
 
