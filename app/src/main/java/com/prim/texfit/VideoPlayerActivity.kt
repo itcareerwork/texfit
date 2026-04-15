@@ -77,6 +77,11 @@ class VideoPlayerActivity : Activity() {
     private lateinit var btnControlDelete: Button
     private lateinit var btnControlGeneralSettings: Button
 
+    // Кнопки тонкой настройки
+    private lateinit var layoutFineTuning: View
+    private lateinit var btnFineBack: Button
+    private lateinit var btnFineForward: Button
+
     private var videoItemId: String = ""
     private var videoFileName: String = ""
     private var fileNumForDisplay: String = "000"
@@ -187,6 +192,11 @@ class VideoPlayerActivity : Activity() {
         btnControlDelete = findViewById(R.id.btn_control_delete)
         btnControlGeneralSettings = findViewById(R.id.btn_control_general_settings)
 
+        // Кнопки тонкой настройки
+        layoutFineTuning = findViewById(R.id.layout_fine_tuning)
+        btnFineBack = findViewById(R.id.btn_fine_back)
+        btnFineForward = findViewById(R.id.btn_fine_forward)
+
         // Возвращаем цвета переключателя
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
         val grayColor = Color.GRAY
@@ -208,6 +218,7 @@ class VideoPlayerActivity : Activity() {
             loadTimingsFromConfig()
             setupStopwatch()
             setupExerciseControls()
+            setupFineTuningControls()
 
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
@@ -315,6 +326,27 @@ class VideoPlayerActivity : Activity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) { isSeeking = true }
             override fun onStopTrackingTouch(seekBar: SeekBar?) { isSeeking = false }
         })
+    }
+
+    private fun setupFineTuningControls() {
+        if (!isFromSettings) return
+
+        btnFineBack.setOnClickListener {
+            val current = if (isSeeking) lastVideoPos else player.currentPosition.toInt()
+            val target = (current - 100).coerceAtLeast(0)
+            beginSeek(target)
+            updateUIState()
+            updateExerciseControlsUI()
+        }
+
+        btnFineForward.setOnClickListener {
+            val current = if (isSeeking) lastVideoPos else player.currentPosition.toInt()
+            val total = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
+            val target = (current + 100).coerceAtMost(total)
+            beginSeek(target)
+            updateUIState()
+            updateExerciseControlsUI()
+        }
     }
 
     private fun toggleStopwatch() {
@@ -965,6 +997,7 @@ class VideoPlayerActivity : Activity() {
         
         if (isFromSettings) {
             layoutExerciseControls.visibility = visibility
+            layoutFineTuning.visibility = visibility
             if (show) updateExerciseControlsUI()
         }
     }
