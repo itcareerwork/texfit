@@ -4,6 +4,8 @@
     <string name="menu_folder">Папка</string>
     <string name="menu_file">Файл</string>
     <string name="menu_refresh">Обновить папку</string>
+    <string name="menu_sort">Сортировать</string>
+    <string name="menu_backup">Backup</string>
     <string name="folder_selected">Папка не выбрана</string>
     <string name="file_not_mp4">Выберите MP4 файл</string>
     <string name="no_active_exercises">Нет активных упражнений</string>
@@ -17,6 +19,7 @@
     <string name="note_title">Заметка</string>
     <string name="dialog_ok">OK</string>
     <string name="dialog_cancel">Отмена</string>
+    <string name="dialog_save">Сохранить</string>
     <string name="exercise_title_format">Упражнение: %s</string>
     <string name="delete_option_title">Удалить запись?</string>
     <string name="new_session">Новый сеанс</string>
@@ -32,6 +35,41 @@
     <string name="label_reset_to">Сброс на:</string>
     <string name="dialog_title_name">Название</string>
     <string name="session_no_not_selected">№ не выбран</string>
+    <string name="session_number_selected">Выбран № %s</string>
+
+    <string name="backup_create">Создать бэкап</string>
+    <string name="backup_restore">Восстановить из существующих</string>
+    <string name="backup_not_found">Бэкапы не найдены</string>
+    <string name="backup_select_file">Выберите файл</string>
+    <string name="backup_created">Backup создан: %s</string>
+    <string name="backup_restored">Восстановлено из %s</string>
+    <string name="sorted_msg">Отсортировано</string>
+    
+    <string name="header_session">Сеанс</string>
+    <string name="header_exercise">Упражнение</string>
+    <string name="header_name">Название</string>
+    <string name="header_size_label">Размер</string>
+    <string name="header_note_label">Прим.</string>
+    <string name="header_num">№</string>
+
+    <string name="btn_launch">Запуск</string>
+    <string name="pause_label">ПАУЗА</string>
+    <string name="stopwatch_label">СЕКУНДОМЕР</string>
+    <string name="stopwatch_stop">СТОП</string>
+    <string name="error_set_max_first">Сначала задайте MAX</string>
+    <string name="file_number_format">№ файла %s</string>
+    <string name="multiplier_range">1-10</string>
+    <string name="saved_msg">Сохранено</string>
+    <string name="reset_all">Сбросить все</string>
+    <string name="delete_all">Удалить все</string>
+    <string name="all_timings_reset">Все тайминги сброшены</string>
+    <string name="all_timings_deleted">Тайминги удалены</string>
+    
+    <string name="label_limit_max">ЛИМИТ (MAX):</string>
+    <string name="label_step_increment">ШАГ ПРИБАВКИ:</string>
+    <string name="label_multiplier">Множитель:</string>
+    <string name="btn_general_settings">Общие настройки</string>
+    <string name="switch_enable">Включить</string>
 
     <string name="help_title">Справка</string>
     <string name="help_text">
@@ -54,10 +92,6 @@
         &lt;br&gt; \t - задаем в таблице номер и имя сеанса (например: 1 Утро, 2 День)
         &lt;br&gt; \t - придумываем номер и название упражнения (01 Зарядка, 02 Приседания). Номер - это очередность выполнения, сначала делаем Зарядку, затем Приседания
         &lt;br&gt; \t - правильно заполненая строка подсвечивается &lt;b&gt; зеленым &lt;/b&gt; цветом, незаполненая строка и не участвующая в выборке - &lt;b&gt; красным &lt;/b&gt;
-        &lt;br&gt; \t - для одного сеанса можно устанавливать несколько одинаковых упражнений (01 Зарядка, 02 Приседания, 03 Зарядка), при этом номера файлов должны быть соседними (003 зарядка3.mp4, 004 зарядка4.mp4). Пример:
-        &lt;br&gt; \t \t |1 Утро|01 Зарядка   |003 зарядка3.mp4|
-        &lt;br&gt; \t \t |1 Утро|02 Зарядка   |004 зарядка4.mp4|
-        &lt;br&gt; \t \t |1 Утро|03 Приседания|001 присед01.mp4|
         &lt;br&gt; \t \t Благодаря &lt;b&gt; нумерации &lt;/b&gt;, записанные как угодно упражнения автоматически отсортируются в нужном порядке
         &lt;br&gt; \t - если файлов для какого-либо упражнения &lt;b&gt; несколько &lt;/b&gt; (например, 3 вида приседаний и нужно их чередовать) - задаем номер файла для очередности (001 приседание1.mp4, 002 приседание2.mp4, 003 приседание3.mp4)
         &lt;br&gt; \t - как только количество файлов для определённого упражнения  закончится, цикл начнется заново с &lt;b&gt; первого &lt;/b&gt; файла

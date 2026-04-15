@@ -283,7 +283,7 @@ class SettingsActivity : AppCompatActivity() {
         val dialog = AlertDialog.Builder(this)
             .setTitle(getString(R.string.help_title))
             .setView(scroll)
-            .setPositiveButton("OK", null)
+            .setPositiveButton(getString(R.string.dialog_ok), null)
             .create()
         
         dialog.show()
@@ -365,8 +365,8 @@ class SettingsActivity : AppCompatActivity() {
             Triple(1, getString(R.string.menu_folder), R.drawable.ic_add_folder),
             Triple(2, getString(R.string.menu_file), R.drawable.ic_add_video),
             Triple(3, getString(R.string.menu_refresh), R.drawable.ic_refresh_custom),
-            Triple(5, "Сортировать", R.drawable.ic_sort_custom),
-            Triple(4, "Backup", R.drawable.ic_backup_custom)
+            Triple(5, getString(R.string.menu_sort), R.drawable.ic_sort_custom),
+            Triple(4, getString(R.string.menu_backup), R.drawable.ic_backup_custom)
         )
 
         val adapter = object : ArrayAdapter<Triple<Int, String, Int>>(this, android.R.layout.select_dialog_item, items) {
@@ -399,16 +399,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showBackupOptionsDialog() {
-        val options = arrayOf("Создать бэкап", "Восстановить из существующих")
+        val options = arrayOf(getString(R.string.backup_create), getString(R.string.backup_restore))
         val builder = AlertDialog.Builder(this)
-            .setTitle("Backup")
+            .setTitle(getString(R.string.menu_backup))
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> performBackup()
                     1 -> showRestoreDialog()
                 }
             }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton(getString(R.string.dialog_cancel), null)
         val dialog = builder.create()
         dialog.show()
         tintDialogButtons(dialog)
@@ -420,14 +420,14 @@ class SettingsActivity : AppCompatActivity() {
             .filter { it.name?.endsWith(".backup") == true }
             .sortedByDescending { it.lastModified() }
         if (backupFiles.isEmpty()) {
-            Toast.makeText(this, "Бэкапы не найдены", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.backup_not_found), Toast.LENGTH_SHORT).show()
             return
         }
         val names = backupFiles.map { it.name ?: "Unnamed" }.toTypedArray()
         val builder = AlertDialog.Builder(this)
-            .setTitle("Выберите файл")
+            .setTitle(getString(R.string.backup_select_file))
             .setItems(names) { _, which -> restoreBackup(backupFiles[which]) }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton(getString(R.string.dialog_cancel), null)
         val dialog = builder.create()
         dialog.show()
         tintDialogButtons(dialog)
@@ -443,7 +443,7 @@ class SettingsActivity : AppCompatActivity() {
             folder.findFile(backupName)?.delete()
             val backupFile = folder.createFile("application/octet-stream", backupName) ?: return
             contentResolver.openOutputStream(backupFile.uri)?.use { it.write(content.toByteArray()) }
-            Toast.makeText(this, "Backup создан: $backupName", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.backup_created, backupName), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) { Log.e(TAG, "Backup error", e) }
     }
 
@@ -454,7 +454,7 @@ class SettingsActivity : AppCompatActivity() {
             val configFile = findOrCreateConfigFile(folder) ?: return
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { it.write(content.toByteArray()) }
             loadUIFromConfig()
-            Toast.makeText(this, "Восстановлено из ${backupFile.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.backup_restored, backupFile.name), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) { Log.e(TAG, "Restore error", e) }
     }
 
@@ -509,9 +509,11 @@ class SettingsActivity : AppCompatActivity() {
             val headersJson = json.optJSONObject("headers")
             if (headersJson != null) {
                 // hColor.text = headersJson.optString("col", "▼") // Заменяем "Цвет" на стрелку
-                hCat1.text = headersJson.optString("cat1", "Сеанс")
-                hCat2.text = headersJson.optString("cat2", "Упражнение"); hCat3.text = headersJson.optString("cat3", "Название")
-                hSize.text = headersJson.optString("size", "Размер"); hNote.text = headersJson.optString("note", "Прим.")
+                hCat1.text = headersJson.optString("cat1", getString(R.string.header_session))
+                hCat2.text = headersJson.optString("cat2", getString(R.string.header_exercise))
+                hCat3.text = headersJson.optString("cat3", getString(R.string.header_name))
+                hSize.text = headersJson.optString("size", getString(R.string.header_size_label))
+                hNote.text = headersJson.optString("note", getString(R.string.header_note_label))
             }
             
             sessionOptions = mutableListOf(); json.optJSONArray("session_options")?.let { arr ->
@@ -565,7 +567,7 @@ class SettingsActivity : AppCompatActivity() {
             .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
             .thenBy { it.fileName })
             
-        saveToConfig(folder, sortedItems); loadUIFromConfig(); Toast.makeText(this, "Отсортировано", Toast.LENGTH_SHORT).show()
+        saveToConfig(folder, sortedItems); loadUIFromConfig(); Toast.makeText(this, getString(R.string.sorted_msg), Toast.LENGTH_SHORT).show()
     }
 
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
@@ -638,9 +640,9 @@ class SettingsActivity : AppCompatActivity() {
                 nF.text = item.numFile; fN.text = if (item.customName.isNotEmpty()) item.customName else item.fileName
                 note.text = item.note; fS.text = formatFileSize(item.fileSizeRaw)
                 
-                sN.setOnClickListener { showOptionsDialog("Сеанс", sessionOptions, item.id) { showAddSessionDialog(item.id) } }
+                sN.setOnClickListener { showOptionsDialog(getString(R.string.header_session), sessionOptions, item.id) { showAddSessionDialog(item.id) } }
                 nE.setOnClickListener { if (item.sessionId.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() else showExerciseNumPopup(item.id) }
-                eN.setOnClickListener { showOptionsDialog("Упражнение", exerciseOptions, item.id) { showAddExerciseDialog(item.id) } }
+                eN.setOnClickListener { showOptionsDialog(getString(R.string.header_exercise), exerciseOptions, item.id) { showAddExerciseDialog(item.id) } }
                 nF.setOnClickListener { if (item.exerciseId.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_exercise_first), Toast.LENGTH_SHORT).show() else showFileNumPopup(item.id) }
                 fN.setOnClickListener {
                     val folder = getFolderDocumentFile(); val file = folder?.findFile(item.fileName)
@@ -659,7 +661,7 @@ class SettingsActivity : AppCompatActivity() {
                 listView.setOnItemClickListener { _, _, i, _ ->
                     val selected = if (i == 0) null else displayOptions[i] as ConfigOption
                     updateItemById(id) { item ->
-                        if (title == "Сеанс") item.copy(sessionId = selected?.id ?: "", numExercise = "")
+                        if (title == getString(R.string.header_session)) item.copy(sessionId = selected?.id ?: "", numExercise = "")
                         else item.copy(exerciseId = selected?.id ?: "", numFile = "")
                     }
                     alertDialog?.dismiss()
@@ -667,8 +669,8 @@ class SettingsActivity : AppCompatActivity() {
                 listView.setOnItemLongClickListener { _, _, i, _ ->
                     if (i == 0) return@setOnItemLongClickListener true
                     val selected = displayOptions[i] as ConfigOption
-                    val builder = AlertDialog.Builder(this@SettingsActivity).setTitle(if (title == "Упражнение") getString(R.string.exercise_title_format, selected.name) else getString(R.string.delete_option_title))
-                    if (title == "Упражнение") {
+                    val builder = AlertDialog.Builder(this@SettingsActivity).setTitle(if (title == getString(R.string.header_exercise)) getString(R.string.exercise_title_format, selected.name) else getString(R.string.delete_option_title))
+                    if (title == getString(R.string.header_exercise)) {
                         val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }
                         val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
                         leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f })
@@ -699,14 +701,14 @@ class SettingsActivity : AppCompatActivity() {
                             val folder = getFolderDocumentFile() ?: return@setNeutralButton
                             saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "") else it }); loadUIFromConfig()
                         }
-                        builder.setPositiveButton("Сохранить") { _, _ -> categoryState[selected.id] = leftValue.text.toString(); resetState[selected.id] = rightValue.text.toString(); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
+                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> categoryState[selected.id] = leftValue.text.toString(); resetState[selected.id] = rightValue.text.toString(); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
                     } else {
                         builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ ->
                             options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton
                             saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "") else it }); loadUIFromConfig()
                         }
                     }
-                    builder.setNegativeButton("Отмена", null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
+                    builder.setNegativeButton(getString(R.string.dialog_cancel), null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
                 }
                 dialogView.addView(listView)
                 dialogView.addView(ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_input_add); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER; topMargin = 16 }; setOnClickListener { onAdd(); alertDialog?.dismiss() } })
@@ -788,7 +790,7 @@ class SettingsActivity : AppCompatActivity() {
                     val listPopup = ListPopupWindow(this@SettingsActivity)
                     listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, available))
                     listPopup.anchorView = btn; listPopup.width = (80 * resources.displayMetrics.density).toInt()
-                    listPopup.setOnItemClickListener { _, _, pos, _ -> selectedNum = available[pos]; numDisplay.text = "Выбран № $selectedNum"; listPopup.dismiss() }
+                    listPopup.setOnItemClickListener { _, _, pos, _ -> selectedNum = available[pos]; numDisplay.text = getString(R.string.session_number_selected, selectedNum); listPopup.dismiss() }
                     listPopup.show()
                 } }
                 val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }

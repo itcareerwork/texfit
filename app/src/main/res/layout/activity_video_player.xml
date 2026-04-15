@@ -99,7 +99,7 @@
             android:id="@+id/sw_exercise_enabled"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Включить"
+            android:text="@string/switch_enable"
             android:textColor="#FFFFFF"
             android:textSize="14sp" />
 
@@ -112,7 +112,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ЛИМИТ (MAX):"
+                android:text="@string/label_limit_max"
                 android:textColor="#CCCCCC"
                 android:textSize="11sp"
                 android:layout_marginTop="8dp" />
@@ -159,7 +159,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ШАГ ПРИБАВКИ:"
+                android:text="@string/label_step_increment"
                 android:textColor="#CCCCCC"
                 android:textSize="11sp"
                 android:layout_marginTop="8dp" />
@@ -206,7 +206,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Множитель:"
+                android:text="@string/label_multiplier"
                 android:textColor="#CCCCCC"
                 android:textSize="11sp"
                 android:layout_marginTop="8dp" />
@@ -216,7 +216,7 @@
                 android:layout_height="42dp"
                 android:background="@android:drawable/editbox_background_normal"
                 android:gravity="center"
-                android:text="--"
+                android:text="@string/empty_option"
                 android:textColor="#000000"
                 android:textSize="18sp" />
 
@@ -233,7 +233,7 @@
                     android:layout_weight="1"
                     android:minHeight="0dp"
                     android:padding="0dp"
-                    android:text="Сохранить"
+                    android:text="@string/dialog_save"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp"
                     app:backgroundTint="#669900" />
@@ -247,7 +247,7 @@
                     android:layout_weight="1"
                     android:minHeight="0dp"
                     android:padding="0dp"
-                    android:text="Удалить"
+                    android:text="@string/delete"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp"
                     app:backgroundTint="#CC0000" />
@@ -261,7 +261,7 @@
                 android:layout_marginTop="8dp"
                 android:minHeight="0dp"
                 android:padding="0dp"
-                android:text="Общие настройки"
+                android:text="@string/btn_general_settings"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
                 app:backgroundTint="#757575" />
@@ -333,7 +333,7 @@
                 android:id="@+id/tv_bottom_stopwatch_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="00:00"
+                android:text="@string/time_default"
                 android:textColor="#FFFFFF"
                 android:textSize="28sp"
                 android:textStyle="bold"
@@ -343,7 +343,7 @@
                 android:id="@+id/tv_stopwatch_status_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="СЕКУНДОМЕР"
+                android:text="@string/stopwatch_label"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold"
@@ -382,7 +382,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="ПАУЗА"
+            android:text="@string/pause_label"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold"

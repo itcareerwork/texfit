@@ -68,7 +68,7 @@
                     android:paddingEnd="8dp"
                     android:minWidth="0dp"
                     android:minHeight="0dp"
-                    android:text="Запуск"
+                    android:text="@string/btn_launch"
                     android:textSize="10sp"
                     android:textAllCaps="false"
                     android:backgroundTint="@android:color/holo_green_dark"
@@ -108,7 +108,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1.8"
                     android:gravity="center"
-                    android:text="Сеанс"
+                    android:text="@string/header_session"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -121,7 +121,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="0.4"
                     android:gravity="center"
-                    android:text="№"
+                    android:text="@string/header_num"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -134,7 +134,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1.6"
                     android:gravity="center"
-                    android:text="Упражнение"
+                    android:text="@string/header_exercise"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -147,7 +147,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="0.4"
                     android:gravity="center"
-                    android:text="№"
+                    android:text="@string/header_num"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -160,7 +160,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="2.4"
                     android:gravity="center"
-                    android:text="Название"
+                    android:text="@string/header_name"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -173,7 +173,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="0.8"
                     android:gravity="center"
-                    android:text="Размер"
+                    android:text="@string/header_size_label"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -186,7 +186,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="2.0"
                     android:gravity="center"
-                    android:text="Прим."
+                    android:text="@string/header_note_label"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="10sp"
                     android:textStyle="bold" />
@@ -228,7 +228,7 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:minWidth="60dp"
-                    android:text="00:00"
+                    android:text="@string/time_default"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="14sp" />
 
@@ -243,7 +243,7 @@
                     android:layout_height="28dp"
                     android:layout_marginEnd="8dp"
                     android:background="@drawable/border_green"
-                    android:contentDescription="Справка"
+                    android:contentDescription="@string/help_title"
                     android:src="@android:drawable/ic_menu_help"
                     android:scaleType="centerInside"
                     android:padding="4dp"
@@ -259,7 +259,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginEnd="8dp"
                 android:layout_marginBottom="32dp"
-                android:text="Папка не выбрана"
+                android:text="@string/folder_selected"
                 android:textSize="10sp" />
 
         </LinearLayout>
