@@ -895,12 +895,20 @@ class VideoPlayerActivity : Activity() {
         }
     }
 
+    private fun findConfigFile(folder: DocumentFile): DocumentFile? {
+        folder.findFile("texfit.cfg")?.let { return it }
+        return folder.listFiles().firstOrNull { file ->
+            val name = file.name ?: return@firstOrNull false
+            name == "texfit.cfg" || name.startsWith("texfit.cfg.")
+        }
+    }
+
     private fun saveCurrentPositionToConfig(pos: Int) {
         if (videoItemId.isEmpty() || isFromSettings) return
         try {
             val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
-            val configFile = folder.findFile("texfit.cfg") ?: return
+            val configFile = findConfigFile(folder) ?: return
             val json: JSONObject
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 json = JSONObject(inputStream.bufferedReader().readText())
@@ -927,7 +935,7 @@ class VideoPlayerActivity : Activity() {
         try {
             val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
-            val configFile = folder.findFile("texfit.cfg") ?: return
+            val configFile = findConfigFile(folder) ?: return
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 val json = JSONObject(inputStream.bufferedReader().readText())
                 currStepConfig = json.optInt("curr_step", 1)
@@ -961,7 +969,7 @@ class VideoPlayerActivity : Activity() {
         try {
             val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
-            val configFile = folder.findFile("texfit.cfg") ?: return
+            val configFile = findConfigFile(folder) ?: return
             val json: JSONObject
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 json = JSONObject(inputStream.bufferedReader().readText())
