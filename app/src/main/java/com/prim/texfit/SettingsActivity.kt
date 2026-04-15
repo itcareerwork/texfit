@@ -109,7 +109,8 @@ class SettingsActivity : AppCompatActivity() {
 
             val selectedItems = mutableListOf<VideoItem>()
             val changedExercises = mutableSetOf<String>()
-            val slotGroups = sourceTable.groupBy { "${it.sessionId}:${it.numExercise}" }
+                //   val slotGroups = sourceTable.groupBy { "${it.sessionId}:${it.numExercise}" } // sort exercise number and session
+            val slotGroups = sourceTable.groupBy { it.exerciseId }
 
             for (group in slotGroups.values) {
                 val firstRow = group.first()
