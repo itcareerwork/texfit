@@ -78,9 +78,8 @@ class VideoPlayerActivity : Activity() {
     private lateinit var btnControlGeneralSettings: Button
 
     // Кнопки тонкой настройки
-    private lateinit var layoutFineTuning: View
-    private lateinit var btnFineBack: Button
-    private lateinit var btnFineForward: Button
+    private lateinit var btnFineBack: ImageButton
+    private lateinit var btnFineForward: ImageButton
 
     private var videoItemId: String = ""
     private var videoFileName: String = ""
@@ -193,7 +192,6 @@ class VideoPlayerActivity : Activity() {
         btnControlGeneralSettings = findViewById(R.id.btn_control_general_settings)
 
         // Кнопки тонкой настройки
-        layoutFineTuning = findViewById(R.id.layout_fine_tuning)
         btnFineBack = findViewById(R.id.btn_fine_back)
         btnFineForward = findViewById(R.id.btn_fine_forward)
 
@@ -970,7 +968,7 @@ class VideoPlayerActivity : Activity() {
             } ?: return
             val videoItems = json.optJSONArray("video_items") ?: return
             for (i in 0 until videoItems.length()) {
-                val item = videoItems.getJSONObject(i)
+                val item = videoItems.optJSONObject(i) ?: continue
                 if (item.optString("id") == videoItemId) {
                     val tArr = JSONArray()
                     timings.forEach {
@@ -997,7 +995,8 @@ class VideoPlayerActivity : Activity() {
         
         if (isFromSettings) {
             layoutExerciseControls.visibility = visibility
-            layoutFineTuning.visibility = visibility
+            btnFineBack.visibility = visibility
+            btnFineForward.visibility = visibility
             if (show) updateExerciseControlsUI()
         }
     }

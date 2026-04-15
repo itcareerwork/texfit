@@ -268,37 +268,6 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Кнопки тонкой настройки (над SeekBar) -->
-    <LinearLayout
-        android:id="@+id/layout_fine_tuning"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_above="@id/layout_ticks"
-        android:layout_centerHorizontal="true"
-        android:layout_marginBottom="8dp"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/btn_fine_back"
-            android:layout_width="64dp"
-            android:layout_height="42dp"
-            android:text="&lt;&lt;&lt;"
-            android:textColor="#FFFFFF"
-            android:background="@drawable/bg_video_control"
-            android:alpha="0.8"
-            android:layout_marginEnd="32dp" />
-
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/btn_fine_forward"
-            android:layout_width="64dp"
-            android:layout_height="42dp"
-            android:text="&gt;&gt;&gt;"
-            android:textColor="#FFFFFF"
-            android:background="@drawable/bg_video_control"
-            android:alpha="0.8" />
-    </LinearLayout>
-
     <!-- Контейнер для рисок (над SeekBar) -->
     <FrameLayout
         android:id="@+id/layout_ticks"
@@ -328,7 +297,7 @@
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="24dp"
         android:orientation="horizontal"
-        android:gravity="center"
+        android:gravity="bottom|center_horizontal"
         android:weightSum="5">
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
@@ -344,6 +313,20 @@
             android:padding="12dp"
             android:alpha="0.8"
             android:contentDescription="Предыдущий отрезок" />
+
+        <ImageButton
+            android:id="@+id/btn_fine_back"
+            android:layout_width="64dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="5dp"
+            android:src="@drawable/ic_fine_back"
+            android:background="@drawable/bg_video_control"
+            app:tint="#FFFFFF"
+            android:scaleType="fitCenter"
+            android:padding="8dp"
+            android:alpha="0.8"
+            android:visibility="gone"
+            android:contentDescription="Тонкая настройка назад" />
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
@@ -383,6 +366,20 @@
         </LinearLayout>
 
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+
+        <ImageButton
+            android:id="@+id/btn_fine_forward"
+            android:layout_width="64dp"
+            android:layout_height="42dp"
+            android:layout_marginEnd="5dp"
+            android:src="@drawable/ic_fine_forward"
+            android:background="@drawable/bg_video_control"
+            app:tint="#FFFFFF"
+            android:scaleType="fitCenter"
+            android:padding="8dp"
+            android:alpha="0.8"
+            android:visibility="gone"
+            android:contentDescription="Тонкая настройка вперед" />
 
         <ImageButton
             android:id="@+id/btn_next"
