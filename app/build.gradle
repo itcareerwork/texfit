@@ -10,43 +10,45 @@ android {
     defaultConfig {
         applicationId "com.prim.texfit"
         minSdk 24
-        targetSdk 36
-        versionCode 1
-        versionName "1.0"
+        targetSdk 35
+        versionCode 3 // Увеличим еще раз для чистоты теста
+        versionName "1.2"
+        multiDexEnabled true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // В новых версиях Studio галочки исчезли. Мы прописываем их здесь.
-    // Пароли НЕ пишем — Studio сама подставит их из вашего окна ввода при сборке.
     signingConfigs {
         release {
-            v1SigningEnabled true
-            v2SigningEnabled true 
+            // Используем прямой синтаксис свойств
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = false
+            enableV4Signing = false
         }
-    }
-
-    base {
-        archivesName = "texfit-v${defaultConfig.versionName}"
     }
 
     buildTypes {
         release {
-            // Привязываем настройки подписи (V1+V2)
             signingConfig signingConfigs.release
-            
             minifyEnabled true 
             shrinkResources true 
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-
-            applicationVariants.all { variant ->
-                variant.outputs.all {
-                    outputFileName = "texfit-v${variant.versionName}.apk"
-                }
-            }
+            // МЕНЯЕМ НА ОБЫЧНЫЙ (без optimize), это ускорит проверку кода на устройстве
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
-        debug {
-            minifyEnabled false
-            shrinkResources false
+    }
+
+    packaging {
+        dex {
+            useLegacyPackaging = true
+        }
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "texfit_v${variant.versionCode}.apk"
         }
     }
 
@@ -65,7 +67,7 @@ dependencies {
     implementation libs.material
     implementation libs.androidx.media3.exoplayer
     implementation libs.androidx.media3.ui
-
+    implementation "androidx.multidex:multidex:2.0.1"
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core
