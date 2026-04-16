@@ -5,35 +5,34 @@ plugins {
 
 android {
     namespace 'com.prim.texfit'
-    compileSdk 36
+    // Compile SDK 35 нужен для поддержки библиотек, требующих Android 15
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.prim.texfit"
         minSdk 24
+        // Целевая версия 35 (Android 15) для полной совместимости
         targetSdk 35
-        versionCode 3 // Увеличим еще раз для чистоты теста
-        versionName "1.2"
-        multiDexEnabled true
+        versionCode 1
+        versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         release {
-            // Используем прямой синтаксис свойств
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = false
-            enableV4Signing = false
+            // Принудительно включаем обе схемы для старых систем
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
     }
 
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled true 
-            shrinkResources true 
-            // МЕНЯЕМ НА ОБЫЧНЫЙ (без optimize), это ускорит проверку кода на устройстве
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            // Стандартный конфиг оптимизации
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
@@ -48,26 +47,27 @@ android {
 
     applicationVariants.all { variant ->
         variant.outputs.all {
-            outputFileName = "texfit_v${variant.versionCode}.apk"
+            outputFileName = "texfit_${variant.versionName}.apk"
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = '17'
+        jvmTarget = '11'
     }
 }
 
 dependencies {
-    implementation libs.androidx.core.ktx
-    implementation libs.androidx.appcompat
-    implementation libs.material
-    implementation libs.androidx.media3.exoplayer
-    implementation libs.androidx.media3.ui
-    implementation "androidx.multidex:multidex:2.0.1"
+    // Используем стабильные версии для диапазона API 24-35
+    implementation "androidx.core:core-ktx:1.13.1"
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'androidx.media3:media3-exoplayer:1.3.1'
+    implementation 'androidx.media3:media3-ui:1.3.1'
+
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core
