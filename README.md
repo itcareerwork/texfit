@@ -1,4 +1,4 @@
-# <img src="https://github.com/itcareerwork/texfit/blob/main/Screenshots/28408984_177092435599948.png" alt="logo" width="32"> TexFit
+# <img src="https://github.com/itcareerwork/texfit/blob/main/Screenshots/28408984_1770924355999.png" alt="logo" width="64"> TexFit
 
 ---
 
