@@ -99,8 +99,9 @@ class SettingsActivity : AppCompatActivity() {
                 allItems.add(VideoItem.fromJson(videoItemsArray.getJSONObject(i)))
             }
 
+            // ИЗМЕНЕНИЕ: фильтруем только те, что явно помечены пользователем как активные
             val sourceTable = allItems.filter { item ->
-                item.sessionId.isNotEmpty() && item.exerciseId.isNotEmpty() && item.numExercise.isNotEmpty() && item.numFile.isNotEmpty()
+                item.isActive
             }.sortedWith(compareBy(
                 { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
                 { it.numExercise.toIntOrNull() ?: 0 },
@@ -109,7 +110,6 @@ class SettingsActivity : AppCompatActivity() {
 
             val selectedItems = mutableListOf<VideoItem>()
             val changedExercises = mutableSetOf<String>()
-                //   val slotGroups = sourceTable.groupBy { "${it.sessionId}:${it.numExercise}" } // sort exercise number and session
             val slotGroups = sourceTable.groupBy { it.exerciseId }
 
             for (group in slotGroups.values) {
@@ -353,8 +353,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateTopInputUI(items: List<VideoItem>? = null) {
         val currentItems = items ?: adapter.currentList
-        val completeItems = currentItems.filter { it.isComplete() }
-        val currentActiveSet = completeItems.map { it.exerciseId }.toSet()
+        // ИЗМЕНЕНИЕ: отображаем в шапке только активные и полные элементы
+        val activeCompleteItems = currentItems.filter { it.isActive && it.isComplete() }
+        val currentActiveSet = activeCompleteItems.map { it.exerciseId }.toSet()
         activeExercisesOrder.removeAll { it !in currentActiveSet }
         currentActiveSet.forEach { if (it !in activeExercisesOrder) activeExercisesOrder.add(it) }
         if (activeExercisesOrder.isEmpty()) { etTopInput.setText(""); return }
@@ -567,7 +568,7 @@ class SettingsActivity : AppCompatActivity() {
         val currentItems = mutableListOf<VideoItem>()
         for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i)))
         
-        val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isComplete() }
+        val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isActive }
             .thenBy { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") }
             .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
             .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
@@ -612,17 +613,29 @@ class SettingsActivity : AppCompatActivity() {
         var sessionId: String = "", var exerciseId: String = "",
         var numExercise: String = "", var numFile: String = "", 
         var fileName: String = "", var fileSizeRaw: Long = 0, var note: String = "",
-        var timings: MutableList<Timing> = mutableListOf(), var customName: String = ""
+        var timings: MutableList<Timing> = mutableListOf(), var customName: String = "",
+        var isActive: Boolean = false // НОВОЕ ПОЛЕ
     ) {
         fun isComplete() = sessionId.isNotEmpty() && exerciseId.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
         fun toJson() = JSONObject().apply {
             put("id", id); put("s_id", sessionId); put("e_id", exerciseId); put("n_e", numExercise); put("n_f", numFile)
-            put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note); put("c_n", customName)
+            put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note); put("c_n", customName); put("is_a", isActive)
             val tArr = JSONArray(); timings.forEach { tArr.put(JSONObject().apply { put("t", it.time); put("m", it.max); put("c", it.curr); put("s", it.step); put("mt", it.multType); put("mv", it.multVal); put("en", it.isEnabled) }) }; put("timings", tArr)
         }
         companion object {
             fun fromJson(j: JSONObject): VideoItem {
-                val vi = VideoItem(id = j.optString("id", generateId()), sessionId = j.optString("s_id"), exerciseId = j.optString("e_id"), numExercise = j.optString("n_e"), numFile = j.optString("n_f"), fileName = j.optString("f_n"), fileSizeRaw = j.optLong("f_sz"), note = j.optString("note"), customName = j.optString("c_n"))
+                val vi = VideoItem(
+                    id = j.optString("id", generateId()), 
+                    sessionId = j.optString("s_id"), 
+                    exerciseId = j.optString("e_id"), 
+                    numExercise = j.optString("n_e"), 
+                    numFile = j.optString("n_f"), 
+                    fileName = j.optString("f_n"), 
+                    fileSizeRaw = j.optLong("f_sz"), 
+                    note = j.optString("note"), 
+                    customName = j.optString("c_n"),
+                    isActive = j.optBoolean("is_a", false)
+                )
                 val tArr = j.optJSONArray("timings"); if (tArr != null) for (i in 0 until tArr.length()) { val tObj = tArr.getJSONObject(i); vi.timings.add(Timing(tObj.getInt("t"), tObj.optLong("m", 0L), tObj.optLong("c", 0L), tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) }
                 return vi
             }
@@ -640,12 +653,23 @@ class SettingsActivity : AppCompatActivity() {
             private val fN: TextView = v.findViewById(R.id.col_file_name); private val fS: TextView = v.findViewById(R.id.col_file_size); private val note: TextView = v.findViewById(R.id.col_note)
 
             fun bind(item: VideoItem) {
-                indicator.setBackgroundColor(if (item.isComplete()) 0xFF99CC00.toInt() else 0xFFF44336.toInt())
+                // ИЗМЕНЕНИЕ: цвет зависит только от флага isActive
+                indicator.setBackgroundColor(if (item.isActive) 0xFF99CC00.toInt() else 0xFFF44336.toInt())
+                
                 sN.text = sessionOptions.find { it.id == item.sessionId }?.name ?: ""
                 nE.text = item.numExercise; eN.text = exerciseOptions.find { it.id == item.exerciseId }?.name ?: ""
                 nF.text = item.numFile; fN.text = if (item.customName.isNotEmpty()) item.customName else item.fileName
                 note.text = item.note; fS.text = formatFileSize(item.fileSizeRaw)
                 
+                // ИЗМЕНЕНИЕ: Клик на индикатор переключает активность
+                indicator.setOnClickListener {
+                    if (!item.isActive && !item.isComplete()) {
+                        Toast.makeText(this@SettingsActivity, getString(R.string.fill_all_fields), Toast.LENGTH_SHORT).show()
+                    } else {
+                        updateItemById(item.id) { it.copy(isActive = !it.isActive) }
+                    }
+                }
+
                 sN.setOnClickListener { showOptionsDialog(getString(R.string.header_session), sessionOptions, item.id) { showAddSessionDialog(item.id) } }
                 nE.setOnClickListener { if (item.sessionId.isEmpty()) Toast.makeText(this@SettingsActivity, getString(R.string.select_session_first), Toast.LENGTH_SHORT).show() else showExerciseNumPopup(item.id) }
                 eN.setOnClickListener { showOptionsDialog(getString(R.string.header_exercise), exerciseOptions, item.id) { showAddExerciseDialog(item.id) } }
@@ -667,8 +691,10 @@ class SettingsActivity : AppCompatActivity() {
                 listView.setOnItemClickListener { _, _, i, _ ->
                     val selected = if (i == 0) null else displayOptions[i] as ConfigOption
                     updateItemById(id) { item ->
-                        if (title == getString(R.string.header_session)) item.copy(sessionId = selected?.id ?: "", numExercise = "")
+                        val updated = if (title == getString(R.string.header_session)) item.copy(sessionId = selected?.id ?: "", numExercise = "")
                         else item.copy(exerciseId = selected?.id ?: "", numFile = "")
+                        // Если после изменения поля строка стала неполной, сбрасываем isActive
+                        if (!updated.isComplete()) updated.copy(isActive = false) else updated
                     }
                     alertDialog?.dismiss()
                 }
@@ -705,13 +731,13 @@ class SettingsActivity : AppCompatActivity() {
                         builder.setNeutralButton(getString(R.string.delete)) { _, _ ->
                             options.remove(selected); categoryState.remove(selected.id); resetState.remove(selected.id)
                             val folder = getFolderDocumentFile() ?: return@setNeutralButton
-                            saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "") else it }); loadUIFromConfig()
+                            saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it }); loadUIFromConfig()
                         }
                         builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> categoryState[selected.id] = leftValue.text.toString(); resetState[selected.id] = rightValue.text.toString(); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
                     } else {
                         builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ ->
                             options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton
-                            saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "") else it }); loadUIFromConfig()
+                            saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it }); loadUIFromConfig()
                         }
                     }
                     builder.setNegativeButton(getString(R.string.dialog_cancel), null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
@@ -735,7 +761,10 @@ class SettingsActivity : AppCompatActivity() {
                 listPopup.isModal = true
                 listPopup.setOnItemClickListener { _, _, position, _ ->
                     val selected = options[position]
-                    updateItemById(id) { it.copy(numExercise = if (selected == getString(R.string.empty_option)) "" else selected) }
+                    updateItemById(id) { 
+                        val updated = it.copy(numExercise = if (selected == getString(R.string.empty_option)) "" else selected)
+                        if (!updated.isComplete()) updated.copy(isActive = false) else updated
+                    }
                     listPopup.dismiss()
                 }
                 listPopup.show()
@@ -753,7 +782,10 @@ class SettingsActivity : AppCompatActivity() {
                 listPopup.isModal = true
                 listPopup.setOnItemClickListener { _, _, position, _ ->
                     val selected = options[position]
-                    updateItemById(id) { it.copy(numFile = if (selected == getString(R.string.empty_option)) "" else selected) }
+                    updateItemById(id) { 
+                        val updated = it.copy(numFile = if (selected == getString(R.string.empty_option)) "" else selected)
+                        if (!updated.isComplete()) updated.copy(isActive = false) else updated
+                    }
                     listPopup.dismiss()
                 }
                 listPopup.show()

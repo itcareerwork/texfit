@@ -85,6 +85,8 @@
     <string name="unit_tb">ТБ</string>
     <string name="unnamed">Без имени</string>
 
+    <string name="fill_all_fields">Сначала заполните все поля</string>
+
     <string name="help_title">Справка</string>
     <string name="help_text">
 &lt;br&gt;
