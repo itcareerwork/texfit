@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
     }
 
-    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val displayName: String, val lastPos: Int)
+    data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val displayName: String, val lastPos: Int, val segmentPlayed: Long)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
@@ -155,6 +155,7 @@ class MainActivity : AppCompatActivity() {
                     val id = entry.optString(0)
                     val status = entry.optInt(1, 0)
                     val lastPos = entry.optInt(2, 0) 
+                    val segmentPlayed = entry.optLong(3, 0L)
                     
                     val itemJson = videoItemsMap[id] ?: continue
                     val fileName = itemJson.optString("f_n")
@@ -163,7 +164,7 @@ class MainActivity : AppCompatActivity() {
 
                     if (fileName.isNotEmpty()) {
                         folder.findFile(fileName)?.uri?.let { uri ->
-                            playlist.add(PlaylistItem(id, uri, status == 1, displayName, lastPos))
+                            playlist.add(PlaylistItem(id, uri, status == 1, displayName, lastPos, segmentPlayed))
                         }
                     }
                 }
@@ -281,6 +282,7 @@ class MainActivity : AppCompatActivity() {
                 intent.putExtra("video_uri", item.uri)
                 intent.putExtra("video_item_id", item.id)
                 intent.putExtra("last_pos", item.lastPos) 
+                intent.putExtra("segment_played", item.segmentPlayed)
                 intent.putExtra("item_index", position) 
                 startActivity(intent)
             }

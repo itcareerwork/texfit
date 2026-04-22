@@ -116,6 +116,8 @@ class VideoPlayerActivity : Activity() {
 
     private var toneGenerator: ToneGenerator? = null
     private var isCompletionSoundPlayed = false
+    private var initialSegmentPlayed: Long = 0L
+    private var isInitialSegmentRestored: Boolean = false
 
     private fun beginSeek(targetMs: Int) {
         val now = SystemClock.elapsedRealtime()
@@ -227,6 +229,8 @@ class VideoPlayerActivity : Activity() {
         isFromSettings = intent.getBooleanExtra("is_from_settings", false)
         isStopwatchVisible = isFromSettings
         val lastPos = intent.getIntExtra("last_pos", 0)
+        initialSegmentPlayed = intent.getLongExtra("segment_played", 0L)
+        isInitialSegmentRestored = false
 
         if (videoUri != null) {
             loadTimingsFromConfig()
@@ -791,7 +795,14 @@ class VideoPlayerActivity : Activity() {
             activeTiming = currentTiming
             activeTimingTime = currentTiming.time
             activeSegmentEnd = segmentEnd
-            segmentPlayedMs = 0L
+            
+            if (!isInitialSegmentRestored && initialSegmentPlayed > 0) {
+                segmentPlayedMs = initialSegmentPlayed
+                isInitialSegmentRestored = true
+            } else {
+                segmentPlayedMs = 0L
+            }
+            
             lastVideoPos = pos
             pendingSkipZeroCurr = false
             lastTickRealtime = SystemClock.elapsedRealtime()
@@ -945,6 +956,8 @@ class VideoPlayerActivity : Activity() {
                 val entry = titlesArray.optJSONArray(i)
                 if (entry != null && entry.optString(0) == videoItemId) {
                     entry.put(2, pos)
+                    // Сохраняем пройденное время таймера в 4-й слот массива (если он есть или создаем его)
+                    entry.put(3, segmentPlayedMs)
                     break
                 }
             }
