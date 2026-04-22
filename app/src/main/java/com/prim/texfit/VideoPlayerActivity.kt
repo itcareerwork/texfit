@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -112,6 +114,9 @@ class VideoPlayerActivity : Activity() {
     private var stopwatchBaseTime: Long = 0L
     private var stopwatchRunning: Boolean = false
 
+    private var toneGenerator: ToneGenerator? = null
+    private var isCompletionSoundPlayed = false
+
     private fun beginSeek(targetMs: Int) {
         val now = SystemClock.elapsedRealtime()
         if (lastIssuedSeekTarget == targetMs && now - lastIssuedSeekRealtime < 350) return
@@ -159,6 +164,13 @@ class VideoPlayerActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUI()
         setContentView(R.layout.activity_video_player)
+
+        // Инициализация звука
+        try {
+            toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+        } catch (e: Exception) {
+            Log.e("VideoPlayer", "Failed to init ToneGenerator", e)
+        }
 
         playerView = findViewById(R.id.player_view)
         playerView.useController = false
@@ -692,6 +704,7 @@ class VideoPlayerActivity : Activity() {
         lastVideoPos = player.currentPosition.toInt()
         pendingSkipZeroCurr = false
         lastTickRealtime = SystemClock.elapsedRealtime()
+        isCompletionSoundPlayed = false
     }
 
     private fun clampSeekTarget(targetMs: Int): Int {
@@ -782,6 +795,7 @@ class VideoPlayerActivity : Activity() {
             lastVideoPos = pos
             pendingSkipZeroCurr = false
             lastTickRealtime = SystemClock.elapsedRealtime()
+            isCompletionSoundPlayed = false
         }
 
         layoutCounterContainer.visibility = View.VISIBLE
@@ -834,6 +848,12 @@ class VideoPlayerActivity : Activity() {
         }
 
         if (segmentPlayedMs >= currMs) {
+            // КОГДА ТАЙМЕР ЗАКОНЧИЛСЯ — ИГРАЕМ ВЫБРАННЫЙ ЗВУК
+            if (!isCompletionSoundPlayed) {
+                toneGenerator?.startTone(ToneGenerator.TONE_PROP_ACK, 200)
+                isCompletionSoundPlayed = true
+            }
+
             if (nextTiming != null) {
                 val target = clampSeekTarget(segmentEnd + 10)
                 if (!isSeeking) {
@@ -1048,6 +1068,8 @@ class VideoPlayerActivity : Activity() {
         super.onDestroy()
         handler.removeCallbacks(updateSeekRunnable)
         try {
+            toneGenerator?.release()
+            toneGenerator = null
             playerView.player = null
             player.release()
         } catch (_: Exception) {}
