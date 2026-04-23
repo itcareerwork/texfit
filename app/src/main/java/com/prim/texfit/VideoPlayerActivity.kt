@@ -281,7 +281,7 @@ class VideoPlayerActivity : Activity() {
             resetTaskTimer(); updateUIState(); updateExerciseControlsUI()
         }
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) { if (fromUser) { userSeekAnchorPos = progress; beginSeek(progress); resetTaskTimer(); updateUIState(); updateExerciseControlsUI() } }
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) { if (fromUser) { userSeekAnchorPos = progress; beginSeek(progress); updateUIState(); updateExerciseControlsUI() } }
             override fun onStartTrackingTouch(seekBar: SeekBar?) { isSeeking = true }
             override fun onStopTrackingTouch(seekBar: SeekBar?) { isSeeking = false }
         })
@@ -460,7 +460,8 @@ class VideoPlayerActivity : Activity() {
                 val entry = titlesArray.optJSONArray(i)
                 if (entry != null && entry.optString(0) == videoItemId) {
                     entry.put(2, pos)
-                    entry.put(3, segmentPlayedMs)
+                    val playedToSave = if (pos == 0) 0L else segmentPlayedMs
+                    entry.put(3, playedToSave)
                     break
                 }
             }
