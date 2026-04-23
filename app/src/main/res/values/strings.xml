@@ -89,6 +89,8 @@
 
     <string name="help_title">Справка</string>
     <string name="help_text">
+        TexFit v2.0
+&lt;br&gt;
 &lt;br&gt;
 &lt;b&gt; TexFit &lt;/b&gt; — это приложение для управления тренировками.
         &lt;br&gt; Каждый день после заданного времени формирует из ваших видеофайлов плейлист на текущий день.
