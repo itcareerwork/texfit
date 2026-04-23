@@ -330,7 +330,20 @@ class VideoPlayerActivity : Activity() {
         }
         btnControlDelete.setOnClickListener {
             val pos = player.currentPosition.toInt(); val sorted = timings.sortedBy { it.time }; val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
-            if (exactTiming != null && exactTiming.time != 0) { timings.remove(exactTiming); saveTimingsToConfig(); drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI() }
+            if (exactTiming != null) {
+                if (exactTiming.time == 0) {
+                    exactTiming.isEnabled = false
+                    exactTiming.max = 0L
+                    exactTiming.step = 0L
+                    exactTiming.multType = 0
+                    exactTiming.multVal = 1
+                    if (currStepConfig == 1) exactTiming.curr = 0L else exactTiming.curr = -1L
+                    SettingsActivity.saveTimingCurr(this, videoItemId, exactTiming.time, exactTiming.curr)
+                } else {
+                    timings.remove(exactTiming)
+                }
+                saveTimingsToConfig(); drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI()
+            }
         }
         btnControlGeneralSettings.setOnClickListener { showGeneralSettingsPopup(it) }
     }
@@ -380,7 +393,7 @@ class VideoPlayerActivity : Activity() {
         val nextTiming = sorted.filter { it.time > pos }.minByOrNull { it.time }; val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
         tvControlSegmentLabel.text = "${formatTime(currentTiming.time)} - ${if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)}"
         pendingEnabled = currentTiming.isEnabled; pendingMultType = currentTiming.multType; pendingMultVal = currentTiming.multVal; swExerciseEnabled.isChecked = pendingEnabled; setFieldsFromMs(currentTiming.max, tvControlMaxMin, tvControlMaxSec); setFieldsFromMs(currentTiming.step, tvControlStepMin, tvControlStepSec); tvControlMult.text = when(pendingMultType) { 1 -> "x$pendingMultVal"; 2 -> getString(R.string.file_number_format, fileNumForDisplay); else -> "--" }
-        updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0); btnControlDelete.visibility = if (currentTiming.time == 0) View.GONE else View.VISIBLE
+        updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0); btnControlDelete.visibility = if (currentTiming.time == 0 && currentTiming.max == 0L && !currentTiming.isEnabled) View.GONE else View.VISIBLE
     }
 
     private fun updateExerciseControlsVisibility(swOn: Boolean, maxOn: Boolean) { tvControlMaxMin.isEnabled = swOn; tvControlMaxSec.isEnabled = swOn; tvControlMaxMin.alpha = if (swOn) 1f else 0.4f; tvControlMaxSec.alpha = if (swOn) 1f else 0.4f; val stepMultEnabled = swOn && maxOn; tvControlStepMin.isEnabled = stepMultEnabled; tvControlStepSec.isEnabled = stepMultEnabled; tvControlStepMin.alpha = if (stepMultEnabled) 1f else 0.4f; tvControlStepSec.alpha = if (stepMultEnabled) 1f else 0.4f; tvControlMult.isEnabled = stepMultEnabled; tvControlMult.alpha = if (stepMultEnabled) 1f else 0.4f }
