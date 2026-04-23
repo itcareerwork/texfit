@@ -68,6 +68,26 @@ class SettingsActivity : AppCompatActivity() {
         private fun generateId(): String = (100000..999999).random().toString()
         private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
 
+        // ХЕЛПЕРЫ ДЛЯ SharedPreferences (Горячие данные)
+        fun getTimingCurr(context: Context, videoId: String, time: Int): Long {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getLong("curr_${videoId}_$time", -1L)
+        }
+        fun saveTimingCurr(context: Context, videoId: String, time: Int, curr: Long) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { putLong("curr_${videoId}_$time", curr) }
+        }
+        fun getCategoryState(context: Context, exId: String): String {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("cat_$exId", "000") ?: "000"
+        }
+        fun saveCategoryState(context: Context, exId: String, state: String) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { putString("cat_$exId", state) }
+        }
+        fun getResetState(context: Context, exId: String): String {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("reset_$exId", "001") ?: "001"
+        }
+        fun saveResetState(context: Context, exId: String, state: String) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { putString("reset_$exId", state) }
+        }
+
         fun applyLaunchLogic(json: JSONObject, context: Context): JSONObject {
             val currStep = json.optInt("curr_step", 1)
             
@@ -78,20 +98,11 @@ class SettingsActivity : AppCompatActivity() {
                     sessionOptions.add(ConfigOption(obj.getString("id"), obj.getString("name")))
                 }
             }
-
-            val categoryState = mutableMapOf<String, String>()
-            json.optJSONObject("category_state")?.let { obj ->
-                obj.keys().forEach { key -> categoryState[key] = obj.getString(key) }
-            }
-            val resetState = mutableMapOf<String, String>()
-            json.optJSONObject("reset_state")?.let { obj ->
-                obj.keys().forEach { key -> resetState[key] = obj.getString(key) }
-            }
             
             val videoItemsArray = json.optJSONArray("video_items") ?: JSONArray()
             val allItems = mutableListOf<VideoItem>()
             for (i in 0 until videoItemsArray.length()) {
-                allItems.add(VideoItem.fromJson(videoItemsArray.getJSONObject(i)))
+                allItems.add(VideoItem.fromJson(videoItemsArray.getJSONObject(i), context))
             }
 
             val sourceTable = allItems.filter { it.isActive }.sortedWith(compareBy(
@@ -107,35 +118,38 @@ class SettingsActivity : AppCompatActivity() {
             for (group in slotGroups.values) {
                 val firstRow = group.first()
                 val exId = firstRow.exerciseId
-                val currentState = categoryState[exId]?.toIntOrNull() ?: 0
+                val currentState = getCategoryState(context, exId).toIntOrNull() ?: 0
                 var nextStep = currentState + 1
                 
                 val exerciseFiles = sourceTable.filter { it.exerciseId == exId && it.numFile.isNotEmpty() }
                 if (exerciseFiles.isEmpty()) continue
                 val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                val resetVal = resetState[exId]?.toIntOrNull() ?: 1
+                val resetVal = getResetState(context, exId).toIntOrNull() ?: 1
                 if (nextStep > limit) nextStep = resetVal
                 
                 for (row in group) {
                     if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
                         selectedItems.add(row)
-                        categoryState[exId] = String.format(Locale.US, "%03d", nextStep)
+                        saveCategoryState(context, exId, String.format(Locale.US, "%03d", nextStep))
                         changedExercises.add(exId)
                         break 
                     }
                 }
             }
 
-            for (exId in categoryState.keys) {
-                if (exId !in changedExercises) {
-                    val currentState = categoryState[exId]?.toIntOrNull() ?: 0
-                    val exerciseFiles = sourceTable.filter { it.exerciseId == exId && it.numFile.isNotEmpty() }
-                    if (exerciseFiles.isNotEmpty()) {
-                        val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                        val resetVal = resetState[exId]?.toIntOrNull() ?: 1
-                        var nextStep = currentState + 1
-                        if (nextStep > limit) nextStep = resetVal
-                        categoryState[exId] = String.format(Locale.US, "%03d", nextStep)
+            json.optJSONArray("exercise_options")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val exId = arr.getJSONObject(i).getString("id")
+                    if (exId !in changedExercises) {
+                        val currentState = getCategoryState(context, exId).toIntOrNull() ?: 0
+                        val exerciseFiles = sourceTable.filter { it.exerciseId == exId && it.numFile.isNotEmpty() }
+                        if (exerciseFiles.isNotEmpty()) {
+                            val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+                            val resetVal = getResetState(context, exId).toIntOrNull() ?: 1
+                            var nextStep = currentState + 1
+                            if (nextStep > limit) nextStep = resetVal
+                            saveCategoryState(context, exId, String.format(Locale.US, "%03d", nextStep))
+                        }
                     }
                 }
             }
@@ -160,19 +174,11 @@ class SettingsActivity : AppCompatActivity() {
                             if (t.curr < 0) t.step * multiplier else t.curr + (t.step * multiplier)
                         }
                         t.curr = newCurr.coerceAtMost(t.max)
+                        saveTimingCurr(context, item.id, t.time, t.curr)
                     }
                 }
             }
 
-            val newItemsArray = JSONArray()
-            allItems.forEach { newItemsArray.put(it.toJson()) }
-            json.put("video_items", newItemsArray)
-            
-            val stateObj = JSONObject()
-            categoryState.forEach { (k, v) -> stateObj.put(k, v) }
-            json.put("category_state", stateObj)
-
-            // СОХРАНЯЕМ ПЛЕЙЛИСТ ВО ВНУТРЕННЮЮ ПАМЯТЬ
             val titlesArray = JSONArray()
             selectedItems.forEach { selected ->
                 val entry = JSONArray()
@@ -207,8 +213,6 @@ class SettingsActivity : AppCompatActivity() {
 
     private var sessionOptions = mutableListOf<ConfigOption>()
     private var exerciseOptions = mutableListOf<ConfigOption>()
-    private var categoryState = mutableMapOf<String, String>()
-    private var resetState = mutableMapOf<String, String>()
     private var activeExercisesOrder = mutableListOf<String>()
 
     private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -288,7 +292,7 @@ class SettingsActivity : AppCompatActivity() {
         val json = readConfigJson(configFile) ?: return
         val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
         val items = mutableListOf<VideoItem>()
-        for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i)))
+        for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), this))
         val index = items.indexOfFirst { it.id == id }
         if (index != -1) {
             items[index] = transformer(items[index])
@@ -329,7 +333,7 @@ class SettingsActivity : AppCompatActivity() {
         val sb = StringBuilder("| ")
         activeExercisesOrder.forEach { exId ->
             val exName = exerciseOptions.find { it.id == exId }?.name ?: "???"
-            val num = categoryState[exId] ?: "000"
+            val num = getCategoryState(this, exId)
             sb.append("$exName $num | ")
         }
         etTopInput.setText(sb.toString())
@@ -402,7 +406,7 @@ class SettingsActivity : AppCompatActivity() {
             val json = readConfigJson(configFile) ?: JSONObject()
             val array = json.optJSONArray("video_items") ?: JSONArray()
             val items = mutableListOf<VideoItem>()
-            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i)))
+            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this))
             items.add(VideoItem(id = generateId(), fileName = name, fileSizeRaw = pickedFile.length()))
             saveToConfig(folder, items)
             loadUIFromConfig()
@@ -433,17 +437,13 @@ class SettingsActivity : AppCompatActivity() {
             val json = readConfigJson(configFile) ?: return
             btnLaunch.visibility = if (json.optInt("button", 0) == 1) View.VISIBLE else View.GONE
             
-            // ВРЕМЯ ТРЕНИРОВКИ ТЕПЕРЬ ИЗ PREFS
             tvSetTime.text = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default))
             
-            val headersJson = json.optJSONObject("headers")
-            if (headersJson != null) {
-                hCat1.text = headersJson.optString("cat1", getString(R.string.header_session))
-                hCat2.text = headersJson.optString("cat2", getString(R.string.header_exercise))
-                hCat3.text = headersJson.optString("cat3", getString(R.string.header_name))
-                hSize.text = headersJson.optString("size", getString(R.string.header_size_label))
-                hNote.text = headersJson.optString("note", getString(R.string.header_note_label))
-            }
+            hCat1.text = getString(R.string.header_session)
+            hCat2.text = getString(R.string.header_exercise)
+            hCat3.text = getString(R.string.header_name)
+            hSize.text = getString(R.string.header_size_label)
+            hNote.text = getString(R.string.header_note_label)
             
             sessionOptions = mutableListOf(); json.optJSONArray("session_options")?.let { arr ->
                 for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); sessionOptions.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
@@ -455,12 +455,8 @@ class SettingsActivity : AppCompatActivity() {
             }
             exerciseOptions.sortWith(compareBy { extractNumber(it.name) })
 
-            categoryState = mutableMapOf(); json.optJSONObject("category_state")?.let { obj -> obj.keys().forEach { key -> categoryState[key] = obj.getString(key) } }
-            resetState = mutableMapOf(); json.optJSONObject("reset_state")?.let { obj -> obj.keys().forEach { key -> resetState[key] = obj.getString(key) } }
-            
-            exerciseOptions.forEach { ex -> if (!categoryState.containsKey(ex.id)) categoryState[ex.id] = "000"; if (!resetState.containsKey(ex.id)) resetState[ex.id] = "001" }
             val array = json.optJSONArray("video_items") ?: JSONArray(); val items = mutableListOf<VideoItem>()
-            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i)))
+            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this))
             adapter.submitList(items); updateTopInputUI(items)
         } catch (e: Exception) { Log.e(TAG, getString(R.string.error_loading), e) }
     }
@@ -473,7 +469,7 @@ class SettingsActivity : AppCompatActivity() {
         val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
         val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
         val currentItems = mutableListOf<VideoItem>()
-        for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i)))
+        for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this))
         val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
         val existingNames = updatedItems.map { it.fileName }.toSet()
         filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
@@ -496,15 +492,17 @@ class SettingsActivity : AppCompatActivity() {
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
         try {
             val configFile = findOrCreateConfigFile(folder) ?: return
-            val json = readConfigJson(configFile) ?: JSONObject()
-            json.put("button", json.optInt("button", 0))
-            json.put("curr_step", json.optInt("curr_step", 1))
+            val oldJson = readConfigJson(configFile) ?: JSONObject()
+            
+            // Создаем новый объект, чтобы гарантировать порядок вставки
+            val json = JSONObject()
+            json.put("button", oldJson.optInt("button", 0))
+            json.put("curr_step", oldJson.optInt("curr_step", 1))
+            
             val array = JSONArray(); items.forEach { array.put(it.toJson()) }; json.put("video_items", array)
             val sArr = JSONArray(); sessionOptions.forEach { sArr.put(JSONObject().apply { put("id", it.id); put("name", it.name) }) }; json.put("session_options", sArr)
             val eArr = JSONArray(); exerciseOptions.forEach { eArr.put(JSONObject().apply { put("id", it.id); put("name", it.name) }) }; json.put("exercise_options", eArr)
-            val stateObj = JSONObject(); categoryState.forEach { (k, v) -> stateObj.put(k, v) }; json.put("category_state", stateObj)
-            val resetObj = JSONObject(); resetState.forEach { (k, v) -> resetObj.put(k, v) }; json.put("reset_state", resetObj)
-            json.put("headers", JSONObject().apply { put("col", hColor.text.toString()); put("cat1", hCat1.text.toString()); put("cat2", hCat2.text.toString()); put("cat3", hCat3.text.toString()); put("size", hSize.text.toString()); put("note", hNote.text.toString()) })
+            
             contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
         } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
     }
@@ -522,11 +520,11 @@ class SettingsActivity : AppCompatActivity() {
 
     data class VideoItem(var id: String = generateId(), var sessionId: String = "", var exerciseId: String = "", var numExercise: String = "", var numFile: String = "", var fileName: String = "", var fileSizeRaw: Long = 0, var note: String = "", var timings: MutableList<Timing> = mutableListOf(), var customName: String = "", var isActive: Boolean = false) {
         fun isComplete() = sessionId.isNotEmpty() && exerciseId.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
-        fun toJson() = JSONObject().apply { put("id", id); put("s_id", sessionId); put("e_id", exerciseId); put("n_e", numExercise); put("n_f", numFile); put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note); put("c_n", customName); put("is_a", isActive); val tArr = JSONArray(); timings.forEach { tArr.put(JSONObject().apply { put("t", it.time); put("m", it.max); put("c", it.curr); put("s", it.step); put("mt", it.multType); put("mv", it.multVal); put("en", it.isEnabled) }) }; put("timings", tArr) }
+        fun toJson() = JSONObject().apply { put("id", id); put("s_id", sessionId); put("e_id", exerciseId); put("n_e", numExercise); put("n_f", numFile); put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note); put("c_n", customName); put("is_a", isActive); val tArr = JSONArray(); timings.forEach { tArr.put(JSONObject().apply { put("t", it.time); put("m", it.max); put("s", it.step); put("mt", it.multType); put("mv", it.multVal); put("en", it.isEnabled) }) }; put("timings", tArr) }
         companion object {
-            fun fromJson(j: JSONObject): VideoItem {
+            fun fromJson(j: JSONObject, context: Context): VideoItem {
                 val vi = VideoItem(id = j.optString("id", generateId()), sessionId = j.optString("s_id"), exerciseId = j.optString("e_id"), numExercise = j.optString("n_e"), numFile = j.optString("n_f"), fileName = j.optString("f_n"), fileSizeRaw = j.optLong("f_sz"), note = j.optString("note"), customName = j.optString("c_n"), isActive = j.optBoolean("is_a", false))
-                val tArr = j.optJSONArray("timings"); if (tArr != null) for (i in 0 until tArr.length()) { val tObj = tArr.getJSONObject(i); vi.timings.add(Timing(tObj.getInt("t"), tObj.optLong("m", 0L), tObj.optLong("c", 0L), tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) }
+                val tArr = j.optJSONArray("timings"); if (tArr != null) for (i in 0 until tArr.length()) { val tObj = tArr.getJSONObject(i); val time = tObj.getInt("t"); val currFromPrefs = getTimingCurr(context, vi.id, time); vi.timings.add(Timing(time, tObj.optLong("m", 0L), currFromPrefs, tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) }
                 return vi
             }
         }
@@ -555,9 +553,9 @@ class SettingsActivity : AppCompatActivity() {
                     if (i == 0) return@setOnItemLongClickListener true
                     val selected = displayOptions[i] as ConfigOption; val builder = AlertDialog.Builder(this@SettingsActivity).setTitle(if (title == getString(R.string.header_exercise)) getString(R.string.exercise_title_format, selected.name) else getString(R.string.delete_option_title))
                     if (title == getString(R.string.header_exercise)) {
-                        val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }; val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }; leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f }); val leftValue = TextView(this@SettingsActivity).apply { text = categoryState[selected.id] ?: "000"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; leftValue.setOnClickListener { v -> val optionsList = (0..999).map { String.format(Locale.US, "%03d", it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> leftValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; leftBox.addView(leftValue); val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }; rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f }); val rightValue = TextView(this@SettingsActivity).apply { text = resetState[selected.id] ?: "001"; textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; rightValue.setOnClickListener { v -> val optionsList = listOf("000", "001"); val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> rightValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
-                        builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); categoryState.remove(selected.id); resetState.remove(selected.id); val folder = getFolderDocumentFile() ?: return@setNeutralButton; saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it }); loadUIFromConfig() }
-                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> categoryState[selected.id] = leftValue.text.toString(); resetState[selected.id] = rightValue.text.toString(); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
+                        val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }; val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }; leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f }); val leftValue = TextView(this@SettingsActivity).apply { text = getCategoryState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; leftValue.setOnClickListener { v -> val optionsList = (0..999).map { String.format(Locale.US, "%03d", it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> leftValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; leftBox.addView(leftValue); val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }; rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f }); val rightValue = TextView(this@SettingsActivity).apply { text = getResetState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; rightValue.setOnClickListener { v -> val optionsList = listOf("000", "001"); val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> rightValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
+                        builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton; saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it }); loadUIFromConfig() }
+                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
                     } else { builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton; saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it }); loadUIFromConfig() } }
                     builder.setNegativeButton(getString(R.string.dialog_cancel), null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
                 }
@@ -575,7 +573,7 @@ class SettingsActivity : AppCompatActivity() {
                 val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }; var selectedNum = ""; val numDisplay = TextView(this@SettingsActivity).apply { text = getString(R.string.session_no_not_selected); gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }; val numBtn = ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_menu_sort_by_size); setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER }; setOnClickListener { btn -> val used = sessionOptions.map { it.name.split(" ")[0] }.toSet(); val available = (1..9).map { it.toString() }.filter { !used.contains(it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, available)); listPopup.anchorView = btn; listPopup.width = (80 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> selectedNum = available[pos]; numDisplay.text = getString(R.string.session_number_selected, selectedNum); listPopup.dismiss() }; listPopup.show() } }; val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }; layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput); val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_session)).setView(layout).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = nameInput.text.toString().trim(); if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show(); return@setPositiveButton }; val combined = "$selectedNum $name"; val newOption = ConfigOption(generateId(), combined); sessionOptions.add(newOption); sessionOptions.sortWith(compareBy { extractNumber(it.name) }); updateItemById(id) { it.copy(sessionId = newOption.id) } }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
-            private fun showAddExerciseDialog(id: String) { val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }; val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_exercise)).setView(input).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = input.text.toString().trim(); if (name.isNotEmpty()) { val newOption = ConfigOption(generateId(), name); exerciseOptions.add(newOption); exerciseOptions.sortWith(compareBy { extractNumber(it.name) }); categoryState[newOption.id] = "000"; resetState[newOption.id] = "001"; updateItemById(id) { it.copy(exerciseId = newOption.id) } } }.setNegativeButton(getString(R.string.dialog_cancel), null).create(); dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show() }
+            private fun showAddExerciseDialog(id: String) { val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }; val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_exercise)).setView(input).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = input.text.toString().trim(); if (name.isNotEmpty()) { val newOption = ConfigOption(generateId(), name); exerciseOptions.add(newOption); exerciseOptions.sortWith(compareBy { extractNumber(it.name) }); saveCategoryState(this@SettingsActivity, newOption.id, "000"); saveResetState(this@SettingsActivity, newOption.id, "001"); updateItemById(id) { it.copy(exerciseId = newOption.id) } } }.setNegativeButton(getString(R.string.dialog_cancel), null).create(); dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show() }
         }
     }
 

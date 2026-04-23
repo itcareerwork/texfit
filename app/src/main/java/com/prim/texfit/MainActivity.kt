@@ -109,13 +109,13 @@ class MainActivity : AppCompatActivity() {
                 json = JSONObject(inputStream.bufferedReader().readText())
             } ?: return
 
-            // Применяем логику и сохраняем плейлист во внутреннюю память
-            val updatedJson = SettingsActivity.applyLaunchLogic(json, this)
+            // Применяем логику: обновление curr и состояний циклов теперь идет только в Prefs
+            // Плейлист также сохраняется во внутреннюю память внутри этого метода
+            SettingsActivity.applyLaunchLogic(json, this)
             
-            // Сохраняем обновленные video_items (с новыми прогрессами curr) обратно в файл
-            contentResolver.openOutputStream(configFile.uri, "wt")?.use { outputStream ->
-                OutputStreamWriter(outputStream).use { writer -> writer.write(updatedJson.toString(4)) }
-            }
+            // Файл texfit.cfg больше не перезаписываем автоматически, 
+            // так как все "горячие" данные теперь в SharedPreferences
+            
         } catch (e: Exception) { Log.e(TAG, "Daily update failed", e) }
     }
 

@@ -170,7 +170,6 @@ class VideoPlayerActivity : Activity() {
         hideSystemUI()
         setContentView(R.layout.activity_video_player)
 
-        // Инициализация звука из файла dzyn.mp3
         try {
             completionPlayer = MediaPlayer.create(this, R.raw.dzyn)
         } catch (e: Exception) { Log.e("VideoPlayer", "Failed to init MediaPlayer", e) }
@@ -294,8 +293,8 @@ class VideoPlayerActivity : Activity() {
     }
 
     private fun toggleStopwatch() {
-        if (stopwatchRunning) { stopwatchRunning = false; tvStopwatchStatusLabel.text = "СЕКУНДОМЕР"; tvStopwatchStatusLabel.alpha = 0.7f }
-        else { stopwatchBaseTime = SystemClock.elapsedRealtime(); stopwatchRunning = true; tvStopwatchStatusLabel.text = "СТОП"; tvStopwatchStatusLabel.alpha = 1.0f }
+        if (stopwatchRunning) { stopwatchRunning = false; tvStopwatchStatusLabel.text = getString(R.string.stopwatch_label); tvStopwatchStatusLabel.alpha = 0.7f }
+        else { stopwatchBaseTime = SystemClock.elapsedRealtime(); stopwatchRunning = true; tvStopwatchStatusLabel.text = getString(R.string.stopwatch_stop); tvStopwatchStatusLabel.alpha = 1.0f }
     }
 
     private fun resetStopwatch() { stopwatchBaseTime = SystemClock.elapsedRealtime(); if (!stopwatchRunning) tvBottomStopwatchTime.text = "00:00" }
@@ -312,13 +311,13 @@ class VideoPlayerActivity : Activity() {
         tvControlMaxMin.setOnClickListener { showNumericKeypadPopup(tvControlMaxMin) }; tvControlMaxSec.setOnClickListener { showNumericKeypadPopup(tvControlMaxSec) }
         tvControlStepMin.setOnClickListener { showNumericKeypadPopup(tvControlStepMin) }; tvControlStepSec.setOnClickListener { showNumericKeypadPopup(tvControlStepSec) }
         tvControlMult.setOnClickListener { v ->
-            if (getMsFromUI(isMax = true) <= 0L) { Toast.makeText(this, "Сначала задайте MAX", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
-            val pop = PopupMenu(this, v); pop.menu.add("--"); pop.menu.add("№ файла $fileNumForDisplay")
-            val subMenu = pop.menu.addSubMenu("1-10")
+            if (getMsFromUI(isMax = true) <= 0L) { Toast.makeText(this, getString(R.string.error_set_max_first), Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            val pop = PopupMenu(this, v); pop.menu.add("--"); pop.menu.add(getString(R.string.file_number_format, fileNumForDisplay))
+            val subMenu = pop.menu.addSubMenu(getString(R.string.multiplier_range))
             for (i in 1..10) subMenu.add("x$i")
             pop.setOnMenuItemClickListener { item ->
                 val title = item.title.toString()
-                when { title == "--" -> { pendingMultType = 0; pendingMultVal = 1; tvControlMult.text = "--" }; title.startsWith("№ файла") -> { pendingMultType = 2; pendingMultVal = 1; tvControlMult.text = "№ файла $fileNumForDisplay" }; title.startsWith("x") -> { pendingMultType = 1; pendingMultVal = if (title.length > 1) title.substring(1).toInt() else 1; tvControlMult.text = "x$pendingMultVal" } }
+                when { title == "--" -> { pendingMultType = 0; pendingMultVal = 1; tvControlMult.text = "--" }; title.startsWith(getString(R.string.file_number_format, "").trim()) -> { pendingMultType = 2; pendingMultVal = 1; tvControlMult.text = getString(R.string.file_number_format, fileNumForDisplay) }; title.startsWith("x") -> { pendingMultType = 1; pendingMultVal = if (title.length > 1) title.substring(1).toInt() else 1; tvControlMult.text = "x$pendingMultVal" } }
                 true
             }
             pop.show()
@@ -327,7 +326,7 @@ class VideoPlayerActivity : Activity() {
             val pos = player.currentPosition.toInt(); val target = findOrAddTiming(pos)
             target.isEnabled = pendingEnabled; target.max = getMsFromUI(isMax = true); target.step = getMsFromUI(isMax = false); target.multType = pendingMultType; target.multVal = pendingMultVal
             if (currStepConfig == 1) target.curr = if (target.step > 0) -target.step else 0L else target.curr = -1L
-            saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
+            saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.saved_msg), Toast.LENGTH_SHORT).show()
         }
         btnControlDelete.setOnClickListener {
             val pos = player.currentPosition.toInt(); val sorted = timings.sortedBy { it.time }; val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
@@ -360,8 +359,8 @@ class VideoPlayerActivity : Activity() {
     private fun showGeneralSettingsPopup(anchor: View) {
         val dialogView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16); setBackgroundColor(Color.parseColor("#E0000000")) }
         fun createPopupBtn(label: String, color: Int, onClick: () -> Unit): Button = Button(this).apply { text = label; textSize = 14f; setTextColor(Color.WHITE); background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg); backgroundTintList = ColorStateList.valueOf(color); setOnClickListener { onClick(); popup?.dismiss() }; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (42 * resources.displayMetrics.density).toInt()).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() } }
-        dialogView.addView(createPopupBtn("Сбросить все", Color.parseColor("#F57C00")) { timings.forEach { t -> if (currStepConfig == 1) t.curr = if (t.step > 0) -t.step else 0L else t.curr = -1L }; saveTimingsToConfig() ; resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, "Все тайминги сброшены", Toast.LENGTH_SHORT).show() })
-        dialogView.addView(createPopupBtn("Удалить все", Color.parseColor("#1565C0")) { timings.clear(); addDefaultTimings(player.duration.toInt()); saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, "Тайминги удалены", Toast.LENGTH_SHORT).show() })
+        dialogView.addView(createPopupBtn(getString(R.string.reset_all), Color.parseColor("#F57C00")) { timings.forEach { t -> if (currStepConfig == 1) t.curr = if (t.step > 0) -t.step else 0L else t.curr = -1L; SettingsActivity.saveTimingCurr(this, videoItemId, t.time, t.curr) }; saveTimingsToConfig() ; resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_reset), Toast.LENGTH_SHORT).show() })
+        dialogView.addView(createPopupBtn(getString(R.string.delete_all), Color.parseColor("#1565C0")) { timings.clear(); addDefaultTimings(player.duration.toInt()); saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_deleted), Toast.LENGTH_SHORT).show() })
         popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true); popup?.showAsDropDown(anchor)
     }
 
@@ -380,7 +379,7 @@ class VideoPlayerActivity : Activity() {
         val pos = player.currentPosition.toInt(); val sorted = timings.sortedBy { it.time }; val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time } ?: return
         val nextTiming = sorted.filter { it.time > pos }.minByOrNull { it.time }; val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
         tvControlSegmentLabel.text = "${formatTime(currentTiming.time)} - ${if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)}"
-        pendingEnabled = currentTiming.isEnabled; pendingMultType = currentTiming.multType; pendingMultVal = currentTiming.multVal; swExerciseEnabled.isChecked = pendingEnabled; setFieldsFromMs(currentTiming.max, tvControlMaxMin, tvControlMaxSec); setFieldsFromMs(currentTiming.step, tvControlStepMin, tvControlStepSec); tvControlMult.text = when(pendingMultType) { 1 -> "x$pendingMultVal"; 2 -> "№ файла $fileNumForDisplay"; else -> "--" }
+        pendingEnabled = currentTiming.isEnabled; pendingMultType = currentTiming.multType; pendingMultVal = currentTiming.multVal; swExerciseEnabled.isChecked = pendingEnabled; setFieldsFromMs(currentTiming.max, tvControlMaxMin, tvControlMaxSec); setFieldsFromMs(currentTiming.step, tvControlStepMin, tvControlStepSec); tvControlMult.text = when(pendingMultType) { 1 -> "x$pendingMultVal"; 2 -> getString(R.string.file_number_format, fileNumForDisplay); else -> "--" }
         updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0); btnControlDelete.visibility = if (currentTiming.time == 0) View.GONE else View.VISIBLE
     }
 
@@ -471,23 +470,36 @@ class VideoPlayerActivity : Activity() {
 
     private fun loadTimingsFromConfig() {
         try {
-            val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
+            val folderUriStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return; val configFile = findConfigFile(folder) ?: return
             contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
                 val json = JSONObject(inputStream.bufferedReader().readText()); currStepConfig = json.optInt("curr_step", 1); val videoItems = json.optJSONArray("video_items") ?: return
-                for (i in 0 until videoItems.length()) { val item = videoItems.getJSONObject(i); if (item.optString("id") == videoItemId) { videoFileName = item.optString("f_n"); fileNumForDisplay = item.optString("n_f", "000"); val tArr = item.optJSONArray("timings"); timings.clear(); if (tArr != null) for (j in 0 until tArr.length()) { val tObj = tArr.getJSONObject(j); timings.add(SettingsActivity.Timing(tObj.getInt("t"), tObj.optLong("m", 0), tObj.optLong("c", 0), tObj.optLong("s", 0), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", true))) }; break } }
+                for (i in 0 until videoItems.length()) { val item = videoItems.getJSONObject(i); if (item.optString("id") == videoItemId) { videoFileName = item.optString("f_n"); fileNumForDisplay = item.optString("n_f", "000"); val tArr = item.optJSONArray("timings"); timings.clear(); if (tArr != null) for (j in 0 until tArr.length()) { val tObj = tArr.getJSONObject(j); val time = tObj.getInt("t"); val currFromPrefs = SettingsActivity.getTimingCurr(this, videoItemId, time); timings.add(SettingsActivity.Timing(time, tObj.optLong("m", 0), currFromPrefs, tObj.optLong("s", 0), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", true))) }; break } }
             }
         } catch (e: Exception) { Log.e("VideoPlayer", "Load timings error", e) }
     }
 
     private fun saveTimingsToConfig() {
         try {
-            val folderUriStr = getSharedPreferences("TexfitPrefs", Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
+            val folderUriStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return; val configFile = findConfigFile(folder) ?: return
-            val json: JSONObject; contentResolver.openInputStream(configFile.uri)?.use { inputStream -> json = JSONObject(inputStream.bufferedReader().readText()) } ?: return
-            val videoItems = json.optJSONArray("video_items") ?: return
-            for (i in 0 until videoItems.length()) { val item = videoItems.optJSONObject(i) ?: continue; if (item.optString("id") == videoItemId) { val tArr = JSONArray(); timings.forEach { val tObj = JSONObject(); tObj.put("t", it.time); tObj.put("m", it.max); tObj.put("c", it.curr); tObj.put("s", it.step); tObj.put("mt", it.multType); tObj.put("mv", it.multVal); tObj.put("en", it.isEnabled); tArr.put(tObj) }; item.put("timings", tArr); break } }
-            contentResolver.openOutputStream(configFile.uri, "wt")?.use { OutputStreamWriter(it).use { writer -> writer.write(json.toString(4)) } }
+            val oldJson: JSONObject; contentResolver.openInputStream(configFile.uri)?.use { inputStream -> oldJson = JSONObject(inputStream.bufferedReader().readText()) } ?: return
+            val videoItems = oldJson.optJSONArray("video_items") ?: return
+            for (i in 0 until videoItems.length()) { val item = videoItems.optJSONObject(i) ?: continue; if (item.optString("id") == videoItemId) { val tArr = JSONArray(); timings.forEach { val tObj = JSONObject(); tObj.put("t", it.time); tObj.put("m", it.max); /* БЕЗ ПОЛЯ "c" */ tObj.put("s", it.step); tObj.put("mt", it.multType); tObj.put("mv", it.multVal); tObj.put("en", it.isEnabled); tArr.put(tObj); SettingsActivity.saveTimingCurr(this, videoItemId, it.time, it.curr) }; item.put("timings", tArr); break } }
+            
+            // Формируем финальный JSON с правильным порядком
+            val finalJson = JSONObject()
+            finalJson.put("button", oldJson.optInt("button", 0))
+            finalJson.put("curr_step", oldJson.optInt("curr_step", 1))
+            
+            // Копируем остальные ключи
+            oldJson.keys().forEach { key ->
+                if (key != "button" && key != "curr_step") {
+                    finalJson.put(key, oldJson.get(key))
+                }
+            }
+            
+            contentResolver.openOutputStream(configFile.uri, "wt")?.use { OutputStreamWriter(it).use { writer -> writer.write(finalJson.toString(4)) } }
         } catch (e: Exception) { Log.e("VideoPlayer", "Save timings error", e) }
     }
 
