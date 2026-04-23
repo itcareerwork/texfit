@@ -83,6 +83,11 @@ class VideoPlayerActivity : Activity() {
     private lateinit var btnFineBack: ImageButton
     private lateinit var btnFineForward: ImageButton
 
+    // Кнопки звука
+    private lateinit var layoutAudioControls: View
+    private lateinit var btnMuteVideo: ImageButton
+    private lateinit var btnMuteTimer: ImageButton
+
     private var videoItemId: String = ""
     private var videoFileName: String = ""
     private var fileNumForDisplay: String = "000"
@@ -90,6 +95,9 @@ class VideoPlayerActivity : Activity() {
     private var isFromSettings: Boolean = false
     private var timings = mutableListOf<SettingsActivity.Timing>()
     private var currStepConfig: Int = 1
+
+    private var isVideoMuted: Boolean = false
+    private var isTimerMuted: Boolean = false
 
     // Промежуточные переменные
     private var pendingEnabled: Boolean = false
@@ -121,6 +129,8 @@ class VideoPlayerActivity : Activity() {
     companion object {
         private const val PREFS_NAME = "TexfitPrefs"
         private const val KEY_PLAYLIST = "playlist_data"
+        private const val KEY_VIDEO_MUTE = "video_mute_state"
+        private const val KEY_TIMER_MUTE = "timer_mute_state"
     }
 
     private fun beginSeek(targetMs: Int) {
@@ -170,6 +180,10 @@ class VideoPlayerActivity : Activity() {
         hideSystemUI()
         setContentView(R.layout.activity_video_player)
 
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        isVideoMuted = prefs.getBoolean(KEY_VIDEO_MUTE, false)
+        isTimerMuted = prefs.getBoolean(KEY_TIMER_MUTE, false)
+
         try {
             completionPlayer = MediaPlayer.create(this, R.raw.dzyn)
         } catch (e: Exception) { Log.e("VideoPlayer", "Failed to init MediaPlayer", e) }
@@ -207,6 +221,13 @@ class VideoPlayerActivity : Activity() {
         btnControlGeneralSettings = findViewById(R.id.btn_control_general_settings)
 
         btnFineBack = findViewById(R.id.btn_fine_back); btnFineForward = findViewById(R.id.btn_fine_forward)
+
+        layoutAudioControls = findViewById(R.id.layout_audio_controls)
+        btnMuteVideo = findViewById(R.id.btn_mute_video)
+        btnMuteTimer = findViewById(R.id.btn_mute_timer)
+
+        btnMuteVideo.setOnClickListener { isVideoMuted = !isVideoMuted; applyAudioState() }
+        btnMuteTimer.setOnClickListener { isTimerMuted = !isTimerMuted; applyAudioState() }
 
         val greenColor = ContextCompat.getColor(this, android.R.color.holo_green_dark)
         val grayColor = Color.GRAY
@@ -247,6 +268,7 @@ class VideoPlayerActivity : Activity() {
                                 player.pause()
                                 showControls(true)
                                 resetTaskTimer()
+                                applyAudioState()
                                 updateUIState()
                                 handler.post(updateSeekRunnable)
                             }
@@ -284,6 +306,19 @@ class VideoPlayerActivity : Activity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) { isSeeking = true }
             override fun onStopTrackingTouch(seekBar: SeekBar?) { isSeeking = false }
         })
+    }
+
+    private fun applyAudioState() {
+        if (::player.isInitialized) {
+            player.volume = if (isVideoMuted) 0f else 1f
+        }
+        btnMuteVideo.alpha = if (isVideoMuted) 0.4f else 1.0f
+        btnMuteTimer.alpha = if (isTimerMuted) 0.4f else 1.0f
+        
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_VIDEO_MUTE, isVideoMuted)
+            .putBoolean(KEY_TIMER_MUTE, isTimerMuted)
+            .apply()
     }
 
     private fun setupFineTuningControls() {
@@ -442,7 +477,7 @@ class VideoPlayerActivity : Activity() {
         val remainingMs = (currMs - segmentPlayedMs).coerceAtLeast(0L); tvExerciseCounter.text = formatTime(remainingMs.toInt()); circularTimer.progress = ((remainingMs.toFloat() / currMs.toFloat()) * 100f).toInt().coerceIn(0, 100)
         val stepMs = currentTiming.step.coerceAtLeast(0L); if (stepMs > 0) { layoutStickContainer.rotation = -((segmentPlayedMs % stepMs).toFloat() / stepMs.toFloat()) * 360f; layoutStickContainer.visibility = View.VISIBLE } else layoutStickContainer.visibility = View.GONE
         if (segmentPlayedMs >= currMs) {
-            if (!isCompletionSoundPlayed) {
+            if (!isCompletionSoundPlayed && !isTimerMuted) {
                 completionPlayer?.start()
                 isCompletionSoundPlayed = true
             }
@@ -516,7 +551,7 @@ class VideoPlayerActivity : Activity() {
         } catch (e: Exception) { Log.e("VideoPlayer", "Save timings error", e) }
     }
 
-    private fun showControls(show: Boolean) { val v = if (show) View.VISIBLE else View.GONE; layoutPauseInfo.visibility = v; btnStop.visibility = v; if (isFromSettings) { layoutExerciseControls.visibility = v; btnFineBack.visibility = v; btnFineForward.visibility = v; if (show) updateExerciseControlsUI() } }
+    private fun showControls(show: Boolean) { val v = if (show) View.VISIBLE else View.GONE; layoutPauseInfo.visibility = v; btnStop.visibility = v; layoutAudioControls.visibility = v; if (isFromSettings) { layoutExerciseControls.visibility = v; btnFineBack.visibility = v; btnFineForward.visibility = v; if (show) updateExerciseControlsUI() } }
     private fun updateTimeDisplay() { val current = player.currentPosition.toInt(); val total = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt(); if (total > 0) tvTime.text = "${formatTime(current)} / ${formatTime(total)}" }
     private fun formatTime(millis: Int): String { val totalSec = millis / 1000; return String.format(Locale.US, "%02d:%02d", totalSec / 60, totalSec % 60) }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideSystemUI() }
