@@ -163,7 +163,9 @@ class SettingsActivity : AppCompatActivity() {
                             2 -> fileNum.toLong()
                             else -> 1L
                         }
-                        val newCurr = if (currStep == 0) {
+                        val newCurr = if (t.step <= 0L) {
+                            t.max
+                        } else if (currStep == 0) {
                             when {
                                 t.curr == -1L -> 0L
                                 t.curr == 0L -> -t.step

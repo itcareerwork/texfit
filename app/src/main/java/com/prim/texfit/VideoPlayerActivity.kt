@@ -342,7 +342,7 @@ class VideoPlayerActivity : Activity() {
 
     private fun setupExerciseControls() {
         if (!isFromSettings) return
-        swExerciseEnabled.setOnCheckedChangeListener { _, isChecked -> pendingEnabled = isChecked; updateExerciseControlsVisibility(isChecked, getMsFromUI(isMax = true) > 0) }
+        swExerciseEnabled.setOnCheckedChangeListener { _, isChecked -> pendingEnabled = isChecked; updateExerciseControlsVisibility(isChecked, getMsFromUI(isMax = true) > 0, getMsFromUI(isMax = false) > 0L) }
         tvControlMaxMin.setOnClickListener { showNumericKeypadPopup(tvControlMaxMin) }; tvControlMaxSec.setOnClickListener { showNumericKeypadPopup(tvControlMaxSec) }
         tvControlStepMin.setOnClickListener { showNumericKeypadPopup(tvControlStepMin) }; tvControlStepSec.setOnClickListener { showNumericKeypadPopup(tvControlStepSec) }
         tvControlMult.setOnClickListener { v ->
@@ -359,8 +359,11 @@ class VideoPlayerActivity : Activity() {
         }
         btnControlSave.setOnClickListener {
             val pos = player.currentPosition.toInt(); val target = findOrAddTiming(pos)
-            target.isEnabled = pendingEnabled; target.max = getMsFromUI(isMax = true); target.step = getMsFromUI(isMax = false); target.multType = pendingMultType; target.multVal = pendingMultVal
-            if (currStepConfig == 1) target.curr = if (target.step > 0) -target.step else 0L else target.curr = -1L
+            val maxVal = getMsFromUI(isMax = true); val stepVal = getMsFromUI(isMax = false).coerceAtMost(maxVal)
+            target.isEnabled = pendingEnabled; target.max = maxVal; target.step = stepVal; target.multType = pendingMultType; target.multVal = pendingMultVal
+            if (currStepConfig == 1) {
+                target.curr = if (target.step > 0) -target.step else if (target.max > 0) target.max else 0L
+            } else target.curr = -1L
             saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.saved_msg), Toast.LENGTH_SHORT).show()
         }
         btnControlDelete.setOnClickListener {
@@ -396,12 +399,17 @@ class VideoPlayerActivity : Activity() {
         val display = TextView(this).apply { text = ""; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 0, 0, 8) }; dialogView.addView(display)
         val grid = GridLayout(this).apply { columnCount = 3; rowCount = 4; alignmentMode = GridLayout.ALIGN_BOUNDS }
         var currentInput = ""
-        val onDigitClick = { digit: String -> if (currentInput.length < 2) { currentInput += digit; display.text = currentInput; if (currentInput.length == 2) { var value = currentInput.toInt(); if (isMinField) { if (value > 90) value = 90 } else { if (value > 59) value = 59 }; target.text = String.format(Locale.US, "%02d", value); updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0); handler.postDelayed({ popup?.dismiss() }, 200) } } }
+        val onDigitClick = { digit: String -> if (currentInput.length < 2) { currentInput += digit; display.text = currentInput; if (currentInput.length == 2) { var value = currentInput.toInt(); if (isMinField) { if (value > 90) value = 90 } else { if (value > 59) value = 59 }; target.text = String.format(Locale.US, "%02d", value); syncMaxStepFields(target == tvControlMaxMin || target == tvControlMaxSec); updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0, getMsFromUI(isMax = false) > 0L); handler.postDelayed({ popup?.dismiss() }, 200) } } }
         val btnSize = (48 * resources.displayMetrics.density).toInt()
         fun createKeypadBtn(label: String, onClick: (String) -> Unit): View = Button(this).apply { text = label; textSize = 18f; setTextColor(Color.WHITE); background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg); backgroundTintList = ColorStateList.valueOf(Color.parseColor("#80FFFFFF")); layoutParams = GridLayout.LayoutParams().apply { width = btnSize; height = btnSize; setMargins(4, 4, 4, 4) }; setPadding(0, 0, 0, 0); setOnClickListener { onClick(label) } }
         for (i in 1..9) grid.addView(createKeypadBtn(i.toString(), onDigitClick))
-        grid.addView(createKeypadBtn("C") { currentInput = ""; display.text = "" }); grid.addView(createKeypadBtn("0", onDigitClick)); grid.addView(createKeypadBtn("OK") { if (currentInput.isNotEmpty()) { var value = currentInput.toInt(); if (isMinField) { if (value > 90) value = 90 } else { if (value > 59) value = 59 }; target.text = String.format(Locale.US, "%02d", value); updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0) }; popup?.dismiss() })
+        grid.addView(createKeypadBtn("C") { currentInput = ""; display.text = "" }); grid.addView(createKeypadBtn("0", onDigitClick)); grid.addView(createKeypadBtn("OK") { if (currentInput.isNotEmpty()) { var value = currentInput.toInt(); if (isMinField) { if (value > 90) value = 90 } else { if (value > 59) value = 59 }; target.text = String.format(Locale.US, "%02d", value); syncMaxStepFields(target == tvControlMaxMin || target == tvControlMaxSec); updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0, getMsFromUI(isMax = false) > 0L) }; popup?.dismiss() })
         dialogView.addView(grid); popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true); popup?.showAsDropDown(target)
+    }
+
+    private fun syncMaxStepFields(lastModifiedIsMax: Boolean) {
+        val maxMs = getMsFromUI(true); val stepMs = getMsFromUI(false)
+        if (maxMs > 0 && stepMs > maxMs) { setFieldsFromMs(maxMs, tvControlStepMin, tvControlStepSec) }
     }
 
     private fun showGeneralSettingsPopup(anchor: View) {
@@ -427,11 +435,15 @@ class VideoPlayerActivity : Activity() {
         val pos = player.currentPosition.toInt(); val sorted = timings.sortedBy { it.time }; val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time } ?: return
         val nextTiming = sorted.filter { it.time > pos }.minByOrNull { it.time }; val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt()
         tvControlSegmentLabel.text = "${formatTime(currentTiming.time)} - ${if (nextTiming != null) formatTime(nextTiming.time) else formatTime(totalDur)}"
-        pendingEnabled = currentTiming.isEnabled; pendingMultType = currentTiming.multType; pendingMultVal = currentTiming.multVal; swExerciseEnabled.isChecked = pendingEnabled; setFieldsFromMs(currentTiming.max, tvControlMaxMin, tvControlMaxSec); setFieldsFromMs(currentTiming.step, tvControlStepMin, tvControlStepSec); tvControlMult.text = when(pendingMultType) { 1 -> "x$pendingMultVal"; 2 -> getString(R.string.file_number_format, fileNumForDisplay); else -> "--" }
-        updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0); btnControlDelete.visibility = if (currentTiming.time == 0 && currentTiming.max == 0L && !currentTiming.isEnabled) View.GONE else View.VISIBLE
+        pendingEnabled = currentTiming.isEnabled; pendingMultType = currentTiming.multType; pendingMultVal = currentTiming.multVal; swExerciseEnabled.isChecked = pendingEnabled
+        setFieldsFromMs(currentTiming.max, tvControlMaxMin, tvControlMaxSec)
+        if (currentTiming.step <= 0L) { tvControlStepMin.text = "--"; tvControlStepSec.text = "--" }
+        else { setFieldsFromMs(currentTiming.step, tvControlStepMin, tvControlStepSec) }
+        tvControlMult.text = when(pendingMultType) { 1 -> "x$pendingMultVal"; 2 -> getString(R.string.file_number_format, fileNumForDisplay); else -> "--" }
+        updateExerciseControlsVisibility(pendingEnabled, currentTiming.max > 0, currentTiming.step > 0L); btnControlDelete.visibility = if (currentTiming.time == 0 && currentTiming.max == 0L && !currentTiming.isEnabled) View.GONE else View.VISIBLE
     }
 
-    private fun updateExerciseControlsVisibility(swOn: Boolean, maxOn: Boolean) { tvControlMaxMin.isEnabled = swOn; tvControlMaxSec.isEnabled = swOn; tvControlMaxMin.alpha = if (swOn) 1f else 0.4f; tvControlMaxSec.alpha = if (swOn) 1f else 0.4f; val stepMultEnabled = swOn && maxOn; tvControlStepMin.isEnabled = stepMultEnabled; tvControlStepSec.isEnabled = stepMultEnabled; tvControlStepMin.alpha = if (stepMultEnabled) 1f else 0.4f; tvControlStepSec.alpha = if (stepMultEnabled) 1f else 0.4f; tvControlMult.isEnabled = stepMultEnabled; tvControlMult.alpha = if (stepMultEnabled) 1f else 0.4f }
+    private fun updateExerciseControlsVisibility(swOn: Boolean, maxOn: Boolean, stepOn: Boolean = true) { tvControlMaxMin.isEnabled = swOn; tvControlMaxSec.isEnabled = swOn; tvControlMaxMin.alpha = if (swOn) 1f else 0.4f; tvControlMaxSec.alpha = if (swOn) 1f else 0.4f; val stepEnabled = swOn && maxOn; tvControlStepMin.isEnabled = stepEnabled; tvControlStepSec.isEnabled = stepEnabled; tvControlStepMin.alpha = if (stepEnabled) 1f else 0.4f; tvControlStepSec.alpha = if (stepEnabled) 1f else 0.4f; val multEnabled = stepEnabled && stepOn; tvControlMult.isEnabled = multEnabled; tvControlMult.alpha = if (multEnabled) 1f else 0.4f }
 
     override fun onBackPressed() { saveCurrentPositionToPrefs(player.currentPosition.toInt()); super.onBackPressed() }
 
@@ -444,7 +456,8 @@ class VideoPlayerActivity : Activity() {
         if (d != C.TIME_UNSET) {
             val pos = d.toInt(); val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time }
             if (currentTiming != null && currentTiming.isEnabled && currentTiming.max > 0L) {
-                val currMs = if (currentTiming.curr == -1L) 0L else Math.abs(currentTiming.curr).coerceAtLeast(0L)
+                var currMs = if (currentTiming.step <= 0L && currentTiming.max > 0L) currentTiming.max else if (currentTiming.curr == -1L) 0L else Math.abs(currentTiming.curr).coerceAtLeast(0L)
+                if (currentTiming.max > 0) currMs = currMs.coerceAtMost(currentTiming.max)
                 if (segmentPlayedMs < currMs) { beginSeek(clampSeekTarget(currentTiming.time + 10)); player.play() ; return }
             }
         }
@@ -467,7 +480,8 @@ class VideoPlayerActivity : Activity() {
         }
         if (activeTimingTime != currentTiming.time) { activeTiming = currentTiming; activeTimingTime = currentTiming.time; activeSegmentEnd = segmentEnd; if (!isInitialSegmentRestored && initialSegmentPlayed > 0) { segmentPlayedMs = initialSegmentPlayed; isInitialSegmentRestored = true } else { segmentPlayedMs = 0L }; lastVideoPos = pos; pendingSkipZeroCurr = false; lastTickRealtime = SystemClock.elapsedRealtime(); isCompletionSoundPlayed = false }
         layoutCounterContainer.visibility = View.VISIBLE
-        val currMs = if (currentTiming.curr == -1L) 0L else Math.abs(currentTiming.curr).coerceAtLeast(0L)
+        var currMs = if (currentTiming.step <= 0L && currentTiming.max > 0L) currentTiming.max else if (currentTiming.curr == -1L) 0L else Math.abs(currentTiming.curr).coerceAtLeast(0L)
+        if (currentTiming.max > 0) currMs = currMs.coerceAtMost(currentTiming.max)
         if (currMs == 0L) {
             if (nextTiming != null && segmentEnd > segmentStart) { if (isPlaying && !isSeeking) { val target = clampSeekTarget(segmentEnd + 10); if (pos < target - 50) { clearActiveSegmentState(); beginSeek(target) } } }
             else if (nextTiming == null) { if (isPlaying && !isSeeking) { saveCurrentPositionToPrefs(0); finish() } }
