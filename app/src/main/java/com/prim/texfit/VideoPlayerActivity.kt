@@ -489,7 +489,11 @@ class VideoPlayerActivity : Activity() {
         }
         val now = SystemClock.elapsedRealtime(); if (isPlaying && !isSeeking) { val dt = now - lastTickRealtime; if (dt > 0) segmentPlayedMs += dt }; lastTickRealtime = now; lastVideoPos = pos
         val remainingMs = (currMs - segmentPlayedMs).coerceAtLeast(0L); tvExerciseCounter.text = formatTime(remainingMs.toInt()); circularTimer.progress = ((remainingMs.toFloat() / currMs.toFloat()) * 100f).toInt().coerceIn(0, 100)
-        val stepMs = currentTiming.step.coerceAtLeast(0L); if (stepMs > 0) { layoutStickContainer.rotation = -((segmentPlayedMs % stepMs).toFloat() / stepMs.toFloat()) * 360f; layoutStickContainer.visibility = View.VISIBLE } else layoutStickContainer.visibility = View.GONE
+        val visualStepMs = if (currentTiming.step > 0L) currentTiming.step else currentTiming.max
+        if (visualStepMs > 0L) {
+            layoutStickContainer.rotation = -((segmentPlayedMs % visualStepMs).toFloat() / visualStepMs.toFloat()) * 360f
+            layoutStickContainer.visibility = View.VISIBLE
+        } else layoutStickContainer.visibility = View.GONE
         if (segmentPlayedMs >= currMs) {
             if (!isCompletionSoundPlayed && !isTimerMuted) {
                 completionPlayer?.start()
