@@ -304,14 +304,14 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Контейнер для рисок (над SeekBar) -->
+    <!-- Контейнер для рисок (прижат к низу, накладывается на SeekBar) -->
     <FrameLayout
         android:id="@+id/layout_ticks"
         android:layout_width="match_parent"
-        android:layout_height="18dp"
+        android:layout_height="120dp"
         android:layout_alignParentBottom="true"
-        android:layout_marginBottom="15dp"
-        android:elevation="2dp" />
+        android:elevation="2dp"
+        android:clipChildren="false" />
 
     <SeekBar
         android:id="@+id/seek_bar"
@@ -327,7 +327,45 @@
         android:maxHeight="18dp"
         android:progressDrawable="@android:drawable/progress_horizontal" />
 
-    <!-- Кнопки Назад / Секундомер / Вперед -->
+    <!-- Секундомер приподнят -->
+    <LinearLayout
+        android:id="@+id/layout_bottom_stopwatch"
+        android:layout_width="140dp"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/layout_bottom_controls"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="12dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_video_control"
+        android:padding="8dp">
+        
+        <TextView
+            android:id="@+id/tv_bottom_stopwatch_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/time_default"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:alpha="1.0" />
+
+        <TextView
+            android:id="@+id/tv_stopwatch_status_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/stopwatch_label"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:alpha="0.8"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- Кнопки Назад / Вперед -->
     <LinearLayout
         android:id="@+id/layout_bottom_controls"
         android:layout_width="match_parent"
@@ -366,44 +404,23 @@
             android:visibility="gone"
             android:contentDescription="Тонкая настройка назад" />
 
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
-        <!-- Секундомер внизу -->
-        <LinearLayout
-            android:id="@+id/layout_bottom_stopwatch"
-            android:layout_width="140dp"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:visibility="gone"
-            android:clickable="true"
-            android:focusable="true"
+        <!-- Новая кнопка Play без учета таймера (64x42 как тонкая настройка) -->
+        <View android:id="@+id/spacer_center_left" android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+        
+        <ImageButton
+            android:id="@+id/btn_play_no_timer"
+            android:layout_width="64dp"
+            android:layout_height="42dp"
+            android:src="@drawable/ic_play_pause_custom"
             android:background="@drawable/bg_video_control"
-            android:padding="8dp">
+            app:tint="#FFFFFF"
+            android:scaleType="fitCenter"
+            android:padding="8dp"
+            android:alpha="0.8"
+            android:visibility="gone"
+            android:contentDescription="Играть без таймера" />
             
-            <TextView
-                android:id="@+id/tv_bottom_stopwatch_time"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/time_default"
-                android:textColor="#FFFFFF"
-                android:textSize="28sp"
-                android:textStyle="bold"
-                android:alpha="1.0" />
-
-            <TextView
-                android:id="@+id/tv_stopwatch_status_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/stopwatch_label"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:alpha="0.8"
-                android:layout_marginTop="2dp" />
-        </LinearLayout>
-
-        <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+        <View android:id="@+id/spacer_center_right" android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
         <ImageButton
             android:id="@+id/btn_fine_forward"

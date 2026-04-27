@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -82,6 +83,7 @@ class VideoPlayerActivity : Activity() {
     // Кнопки тонкой настройки
     private lateinit var btnFineBack: ImageButton
     private lateinit var btnFineForward: ImageButton
+    private lateinit var btnPlayNoTimer: ImageButton
 
     // Кнопки звука
     private lateinit var layoutAudioControls: View
@@ -98,6 +100,7 @@ class VideoPlayerActivity : Activity() {
 
     private var isVideoMuted: Boolean = false
     private var isTimerMuted: Boolean = false
+    private var isIgnoreTimerMode: Boolean = false
 
     // Промежуточные переменные
     private var pendingEnabled: Boolean = false
@@ -131,6 +134,10 @@ class VideoPlayerActivity : Activity() {
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_VIDEO_MUTE = "video_mute_state"
         private const val KEY_TIMER_MUTE = "timer_mute_state"
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
     }
 
     private fun beginSeek(targetMs: Int) {
@@ -221,6 +228,7 @@ class VideoPlayerActivity : Activity() {
         btnControlGeneralSettings = findViewById(R.id.btn_control_general_settings)
 
         btnFineBack = findViewById(R.id.btn_fine_back); btnFineForward = findViewById(R.id.btn_fine_forward)
+        btnPlayNoTimer = findViewById(R.id.btn_play_no_timer)
 
         layoutAudioControls = findViewById(R.id.layout_audio_controls)
         btnMuteVideo = findViewById(R.id.btn_mute_video)
@@ -256,6 +264,7 @@ class VideoPlayerActivity : Activity() {
             player.addListener(object : Player.Listener {
                 private var preparedOnce = false
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    updatePlayNoTimerUI()
                     when (playbackState) {
                         Player.STATE_READY -> {
                             val d = player.duration
@@ -287,7 +296,10 @@ class VideoPlayerActivity : Activity() {
             player.prepare()
         }
 
-        clickInterceptor.setOnClickListener { if (player.playWhenReady) { player.pause(); showControls(true) } else { player.play(); showControls(false) } }
+        clickInterceptor.setOnClickListener { 
+            isIgnoreTimerMode = false
+            if (player.playWhenReady) { player.pause(); showControls(true) } else { player.play(); showControls(false) } 
+        }
         btnStop.setOnClickListener { saveCurrentPositionToPrefs(player.currentPosition.toInt()); player.stop(); finish() }
         btnPrev.setOnClickListener {
             val pos = player.currentPosition.toInt(); val sorted = timings.sortedBy { it.time }; val currentIdx = sorted.indexOfLast { it.time < pos - 100 }
@@ -308,6 +320,11 @@ class VideoPlayerActivity : Activity() {
         })
     }
 
+    private fun updatePlayNoTimerUI() {
+        if (!::btnPlayNoTimer.isInitialized) return
+        btnPlayNoTimer.alpha = if (player.playWhenReady) 1.0f else 0.5f
+    }
+
     private fun applyAudioState() {
         if (::player.isInitialized) {
             player.volume = if (isVideoMuted) 0f else 1f
@@ -325,6 +342,11 @@ class VideoPlayerActivity : Activity() {
         if (!isFromSettings) return
         btnFineBack.setOnClickListener { val current = if (isSeeking) lastVideoPos else player.currentPosition.toInt(); beginSeek((current - 100).coerceAtLeast(0)); updateUIState(); updateExerciseControlsUI() }
         btnFineForward.setOnClickListener { val current = if (isSeeking) lastVideoPos else player.currentPosition.toInt(); val total = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt(); beginSeek((current + 100).coerceAtMost(total)); updateUIState(); updateExerciseControlsUI() }
+        btnPlayNoTimer.setOnClickListener {
+            isIgnoreTimerMode = true
+            if (player.playWhenReady) player.pause() else player.play()
+            updatePlayNoTimerUI()
+        }
     }
 
     private fun toggleStopwatch() {
@@ -467,6 +489,13 @@ class VideoPlayerActivity : Activity() {
     private fun updateStopwatchDisplay() { if (!isStopwatchVisible || !stopwatchRunning) return; tvBottomStopwatchTime.text = formatTime((SystemClock.elapsedRealtime() - stopwatchBaseTime).toInt()) }
 
     private fun processTaskLogic(pos: Int, isPlaying: Boolean) {
+        if (isIgnoreTimerMode && isPlaying) {
+            layoutCounterContainer.visibility = View.GONE
+            lastVideoPos = pos
+            lastTickRealtime = SystemClock.elapsedRealtime()
+            return
+        }
+
         val sorted = timings.sortedBy { it.time }; val currentTiming = sorted.filter { it.time <= pos }.maxByOrNull { it.time } ?: return
         if (!currentTiming.isEnabled) { layoutCounterContainer.visibility = View.GONE; activeTiming = null; activeTimingTime = -1; activeSegmentEnd = -1; segmentPlayedMs = 0L; lastVideoPos = pos; lastTickRealtime = SystemClock.elapsedRealtime(); return }
         val nextTiming = sorted.filter { it.time > currentTiming.time }.minByOrNull { it.time }; val segmentStart = currentTiming.time; val totalDur = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt(); val segmentEnd = nextTiming?.time ?: totalDur
@@ -511,7 +540,74 @@ class VideoPlayerActivity : Activity() {
         if (changed) { timings.sortBy { it.time }; saveTimingsToConfig() }
     }
 
-    private fun drawTicks(duration: Int) { layoutTicks.post { layoutTicks.removeAllViews(); val width = layoutTicks.width; if (width <= 0 || duration <= 0) return@post; timings.forEach { timing -> if (timing.time <= 0 || timing.time >= duration) return@forEach; val tick = View(this).apply { setBackgroundColor(Color.WHITE); alpha = 0.7f }; val params = FrameLayout.LayoutParams(2, FrameLayout.LayoutParams.MATCH_PARENT); params.leftMargin = (timing.time.toFloat() / duration * width).toInt() ; layoutTicks.addView(tick, params) } } }
+    private fun drawTicks(duration: Int) {
+        layoutTicks.post {
+            layoutTicks.removeAllViews()
+            val width = layoutTicks.width
+            val containerHeight = layoutTicks.height
+            if (width <= 0 || duration <= 0) return@post
+            val sorted = timings.sortedBy { it.time }
+            val labelWidth = dpToPx(60f)
+            
+            // SeekBar высотой 48dp прижата к низу. Полоса прогресса в ней 18dp.
+            // Центр полосы прогресса находится на 24dp от низа экрана.
+            val trackCenterFromBottom = dpToPx(24f)
+
+            sorted.forEachIndexed { index, timing ->
+                if (timing.time < 0 || timing.time > duration) return@forEachIndexed
+                
+                val tickX = (timing.time.toFloat() / duration * width).toInt()
+
+                // Риска - точно поверх полосы прогресса
+                val tick = View(this).apply { setBackgroundColor(Color.WHITE); alpha = 0.7f }
+                val tickHeight = dpToPx(18f)
+                val tickParams = FrameLayout.LayoutParams(2, tickHeight)
+                tickParams.leftMargin = tickX
+                tickParams.gravity = Gravity.BOTTOM
+                tickParams.bottomMargin = (trackCenterFromBottom - tickHeight / 2).toInt()
+                layoutTicks.addView(tick, tickParams)
+                
+                if (isFromSettings) {
+                    // Время над риской (MM:SS) - в темной зоне (над SeekBar)
+                    val tvPos = TextView(this).apply {
+                        text = formatTime(timing.time)
+                        setTextColor(Color.WHITE)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
+                        alpha = 1.0f
+                        gravity = Gravity.CENTER
+                    }
+                    val posParams = FrameLayout.LayoutParams(labelWidth, FrameLayout.LayoutParams.WRAP_CONTENT)
+                    posParams.leftMargin = tickX - labelWidth / 2
+                    posParams.gravity = Gravity.BOTTOM
+                    // 48dp - высота SeekBar + небольшой зазор
+                    posParams.bottomMargin = dpToPx(32f)
+                    layoutTicks.addView(tvPos, posParams)
+                    
+                    // Длительность отрезка (MM:SS) - точно в центре желтой линии
+                    val nextTime = if (index < sorted.size - 1) sorted[index + 1].time else duration
+                    val segmentDur = nextTime - timing.time
+                    if (segmentDur > 1000) {
+                        val midPosTime = (timing.time + nextTime) / 2f
+                        val midX = (midPosTime / duration * width).toInt()
+                        
+                        val tvDur = TextView(this).apply {
+                            text = formatTime(segmentDur)
+                            setTextColor(Color.WHITE)
+                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                            alpha = 1.0f
+                            gravity = Gravity.CENTER
+                        }
+                        val durParams = FrameLayout.LayoutParams(labelWidth, FrameLayout.LayoutParams.WRAP_CONTENT)
+                        durParams.leftMargin = midX - labelWidth / 2
+                        durParams.gravity = Gravity.BOTTOM
+                        // Центрируем текст по высоте желтой линии (ее центр на 24dp)
+                        durParams.bottomMargin = (trackCenterFromBottom - dpToPx(7f)).toInt()
+                        layoutTicks.addView(tvDur, durParams)
+                    }
+                }
+            }
+        }
+    }
 
     private fun findConfigFile(folder: DocumentFile): DocumentFile? { folder.findFile("texfit.cfg")?.let { return it }; return folder.listFiles().firstOrNull { val name = it.name ?: return@firstOrNull false; name == "texfit.cfg" || name.startsWith("texfit.cfg.") } }
 
@@ -569,7 +665,21 @@ class VideoPlayerActivity : Activity() {
         } catch (e: Exception) { Log.e("VideoPlayer", "Save timings error", e) }
     }
 
-    private fun showControls(show: Boolean) { val v = if (show) View.VISIBLE else View.GONE; layoutPauseInfo.visibility = v; btnStop.visibility = v; layoutAudioControls.visibility = v; if (isFromSettings) { layoutExerciseControls.visibility = v; btnFineBack.visibility = v; btnFineForward.visibility = v; if (show) updateExerciseControlsUI() } }
+    private fun showControls(show: Boolean) { 
+        val v = if (show) View.VISIBLE else View.GONE
+        layoutPauseInfo.visibility = v
+        btnStop.visibility = v
+        layoutAudioControls.visibility = v
+        if (isFromSettings) { 
+            layoutExerciseControls.visibility = v
+            btnFineBack.visibility = v
+            btnFineForward.visibility = v
+            btnPlayNoTimer.visibility = v
+            btnPrev.visibility = View.VISIBLE
+            btnNext.visibility = View.VISIBLE
+            if (show) updateExerciseControlsUI() 
+        } 
+    }
     private fun updateTimeDisplay() { val current = player.currentPosition.toInt(); val total = if (player.duration == C.TIME_UNSET) 0 else player.duration.toInt(); if (total > 0) tvTime.text = "${formatTime(current)} / ${formatTime(total)}" }
     private fun formatTime(millis: Int): String { val totalSec = millis / 1000; return String.format(Locale.US, "%02d:%02d", totalSec / 60, totalSec % 60) }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideSystemUI() }

@@ -1,12 +1,29 @@
+# Build artifacts
+build/
+app/build/
+.gradle/
 .kotlin/
 .pocketcoder/
-*.log
+
+# Signing files
+*.jks
+*.keystore
+
+# Generated output
 *.apk
 *.aab
-build/
-.gradle/
-.DS_Store
+*.dex
+*.dm0
+*.prof
+*.profm
+
+# IDE files
+.idea/
 *.iml
 *.ipr
 *.iws
-*.idea/
+local.properties
+.DS_Store
+
+# Log files
+*.log
