@@ -277,7 +277,7 @@ class SettingsActivity : AppCompatActivity() {
         tvSetTime.setOnClickListener { showTimePicker() }
 
         loadAndDisplaySelectedFolder()
-        loadUIFromConfig()
+        loadUIFromConfig(showOverlay = true)
     }
 
     private fun showHelpDialog() {
@@ -294,7 +294,7 @@ class SettingsActivity : AppCompatActivity() {
         tintDialogButtons(dialog)
     }
 
-    override fun onResume() { super.onResume(); loadUIFromConfig() }
+    override fun onResume() { super.onResume(); loadUIFromConfig(showOverlay = true) }
 
     private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
         val folder = getFolderDocumentFile() ?: return
@@ -439,9 +439,9 @@ class SettingsActivity : AppCompatActivity() {
     private fun displaySelectedFolder(uri: Uri) { selectedFolderPathTextView.text = uri.path ?: getString(R.string.folder_selected) }
     private fun getFolderUri(): Uri? = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(SELECTED_FOLDER_URI_KEY, null)?.toUri()
 
-    private fun loadUIFromConfig() {
+    private fun loadUIFromConfig(showOverlay: Boolean = false) {
         val folderUri = getFolderUri() ?: return
-        loadingOverlay.visibility = View.VISIBLE
+        if (showOverlay) loadingOverlay.visibility = View.VISIBLE
         
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
