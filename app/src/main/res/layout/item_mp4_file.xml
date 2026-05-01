@@ -93,15 +93,26 @@
         <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
 
         <!-- 7. Размер -->
-        <TextView
-            android:id="@+id/col_file_size"
+        <FrameLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="0.8"
-            android:gravity="center"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textSize="10sp" />
+            android:layout_height="match_parent"
+            android:layout_weight="0.8">
+            <View
+                android:id="@+id/col_file_size_indicator"
+                android:layout_width="3dp"
+                android:layout_height="match_parent"
+                android:background="#FFEB3B"
+                android:visibility="gone" />
+            <TextView
+                android:id="@+id/col_file_size"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:textSize="10sp"
+                android:background="?attr/selectableItemBackground" />
+        </FrameLayout>
 
         <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#CCCCCC" />
 

@@ -11,9 +11,9 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 2,
-      "versionName": "2.0",
-      "outputFile": "texfit_2.0.apk"
+      "versionCode": 3,
+      "versionName": "3.0",
+      "outputFile": "texfit_3.0.apk"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/texfit_2.0.dm"
+        "baselineProfiles/1/texfit_3.0.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/texfit_2.0.dm"
+        "baselineProfiles/0/texfit_3.0.dm"
       ]
     }
   ],
