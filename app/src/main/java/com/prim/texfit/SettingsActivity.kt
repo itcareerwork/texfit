@@ -34,10 +34,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
@@ -206,6 +210,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etTopInput: EditText
     private lateinit var btnLaunch: Button
     private lateinit var btnHelp: ImageButton
+    private lateinit var loadingOverlay: View
     
     private lateinit var hColor: TextView
     private lateinit var hCat1: TextView
@@ -255,6 +260,7 @@ class SettingsActivity : AppCompatActivity() {
         etTopInput = findViewById(R.id.et_top_input)
         btnLaunch = findViewById(R.id.btn_launch)
         btnHelp = findViewById(R.id.btn_help)
+        loadingOverlay = findViewById(R.id.loading_overlay)
         
         hColor = findViewById(R.id.header_color); hCat1 = findViewById(R.id.header_cat1)
         hCat2 = findViewById(R.id.header_cat2); hCat3 = findViewById(R.id.header_cat3)
@@ -435,41 +441,82 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadUIFromConfig() {
         val folderUri = getFolderUri() ?: return
-        val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
-        val configFile = findConfigFileForRead(folder) ?: return
+        loadingOverlay.visibility = View.VISIBLE
         
-        val currentTimestamp = configFile.lastModified()
-        if (currentTimestamp == lastFileModified && adapter.currentList.isNotEmpty()) return
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val folder = DocumentFile.fromTreeUri(this@SettingsActivity, folderUri) ?: return@withContext null
+                    val configFile = findConfigFileForRead(folder) ?: return@withContext null
+                    
+                    val currentTimestamp = configFile.lastModified()
+                    if (currentTimestamp == lastFileModified && adapter.currentList.isNotEmpty()) return@withContext null
 
-        try {
-            val json = readConfigJson(configFile) ?: return
-            btnLaunch.visibility = if (json.optInt("button", 0) == 1) View.VISIBLE else View.GONE
-            
-            tvSetTime.text = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default))
-            
-            hCat1.text = getString(R.string.header_session)
-            hCat2.text = getString(R.string.header_exercise)
-            hCat3.text = getString(R.string.header_name)
-            hSize.text = getString(R.string.header_size_label)
-            hNote.text = getString(R.string.header_note_label)
-            
-            sessionOptions = mutableListOf(); json.optJSONArray("session_options")?.let { arr ->
-                for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); sessionOptions.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
+                    val json = readConfigJson(configFile) ?: return@withContext null
+                    
+                    val sOpts = mutableListOf<ConfigOption>()
+                    json.optJSONArray("session_options")?.let { arr ->
+                        for (i in 0 until arr.length()) {
+                            val obj = arr.getJSONObject(i)
+                            sOpts.add(ConfigOption(obj.getString("id"), obj.getString("name")))
+                        }
+                    }
+                    sOpts.sortWith(compareBy { extractNumber(it.name) })
+
+                    val eOpts = mutableListOf<ConfigOption>()
+                    json.optJSONArray("exercise_options")?.let { arr ->
+                        for (i in 0 until arr.length()) {
+                            val obj = arr.getJSONObject(i)
+                            eOpts.add(ConfigOption(obj.getString("id"), obj.getString("name")))
+                        }
+                    }
+                    eOpts.sortWith(compareBy { extractNumber(it.name) })
+
+                    val array = json.optJSONArray("video_items") ?: JSONArray()
+                    val itemsList = mutableListOf<VideoItem>()
+                    for (i in 0 until array.length()) {
+                        itemsList.add(VideoItem.fromJson(array.getJSONObject(i), this@SettingsActivity))
+                    }
+                    
+                    val btnVisibility = if (json.optInt("button", 0) == 1) View.VISIBLE else View.GONE
+                    val trainingTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
+                    
+                    LoadResult(itemsList, sOpts, eOpts, btnVisibility, trainingTime, currentTimestamp)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Async load error", e)
+                    null
+                }
             }
-            sessionOptions.sortWith(compareBy { extractNumber(it.name) })
 
-            exerciseOptions = mutableListOf(); json.optJSONArray("exercise_options")?.let { arr ->
-                for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); exerciseOptions.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
+            if (result != null) {
+                btnLaunch.visibility = result.btnVisible
+                tvSetTime.text = result.timeStr
+                hCat1.text = getString(R.string.header_session); hCat2.text = getString(R.string.header_exercise)
+                hCat3.text = getString(R.string.header_name); hSize.text = getString(R.string.header_size_label); hNote.text = getString(R.string.header_note_label)
+                
+                sessionOptions = result.sessionOptions.toMutableList()
+                exerciseOptions = result.exerciseOptions.toMutableList()
+                lastFileModified = result.timestamp
+                
+                adapter.submitList(result.items) {
+                    updateTopInputUI(result.items)
+                    loadingOverlay.visibility = View.GONE
+                }
+            } else {
+                loadingOverlay.visibility = View.GONE
             }
-            exerciseOptions.sortWith(compareBy { extractNumber(it.name) })
-
-            val array = json.optJSONArray("video_items") ?: JSONArray(); val items = mutableListOf<VideoItem>()
-            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this))
-            
-            lastFileModified = currentTimestamp
-            adapter.submitList(items); updateTopInputUI(items)
-        } catch (e: Exception) { Log.e(TAG, getString(R.string.error_loading), e) }
+        }
     }
+
+    private data class LoadResult(
+        val items: List<VideoItem>,
+        val sessionOptions: List<ConfigOption>,
+        val exerciseOptions: List<ConfigOption>,
+        val btnVisible: Int,
+        val timeStr: String,
+        val timestamp: Long
+    )
 
     private fun performFullRefresh() {
         val folder = getFolderDocumentFile() ?: return
