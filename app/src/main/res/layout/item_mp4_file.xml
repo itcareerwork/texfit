@@ -99,7 +99,7 @@
             android:layout_weight="0.8">
             <View
                 android:id="@+id/col_file_size_indicator"
-                android:layout_width="3dp"
+                android:layout_width="4dp"
                 android:layout_height="match_parent"
                 android:background="#FFEB3B"
                 android:visibility="gone" />

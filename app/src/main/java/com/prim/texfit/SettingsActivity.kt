@@ -61,6 +61,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val TAG = "SettingsActivity"
         private const val CONFIG_FILE_NAME = "texfit.cfg"
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
+        private const val CONFIG_FILE_URI_KEY = "configFileUri"
         
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
@@ -213,6 +214,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var hSize: TextView
     private lateinit var hNote: TextView
 
+    private var lastFileModified: Long = -1
     private var sessionOptions = mutableListOf<ConfigOption>()
     private var exerciseOptions = mutableListOf<ConfigOption>()
     private var activeExercisesOrder = mutableListOf<String>()
@@ -435,6 +437,10 @@ class SettingsActivity : AppCompatActivity() {
         val folderUri = getFolderUri() ?: return
         val folder = DocumentFile.fromTreeUri(this, folderUri) ?: return
         val configFile = findConfigFileForRead(folder) ?: return
+        
+        val currentTimestamp = configFile.lastModified()
+        if (currentTimestamp == lastFileModified && adapter.currentList.isNotEmpty()) return
+
         try {
             val json = readConfigJson(configFile) ?: return
             btnLaunch.visibility = if (json.optInt("button", 0) == 1) View.VISIBLE else View.GONE
@@ -459,6 +465,8 @@ class SettingsActivity : AppCompatActivity() {
 
             val array = json.optJSONArray("video_items") ?: JSONArray(); val items = mutableListOf<VideoItem>()
             for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this))
+            
+            lastFileModified = currentTimestamp
             adapter.submitList(items); updateTopInputUI(items)
         } catch (e: Exception) { Log.e(TAG, getString(R.string.error_loading), e) }
     }
@@ -586,7 +594,21 @@ class SettingsActivity : AppCompatActivity() {
     private fun readConfigJson(configFile: DocumentFile): JSONObject? = try { contentResolver.openInputStream(configFile.uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) } } catch (e: Exception) { Log.e(TAG, getString(R.string.error_reading), e); null }
     private fun tintDialogButtons(dialog: AlertDialog, neutralIsDestructive: Boolean = false) { dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark)); dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark)); if (neutralIsDestructive) dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark)) }
     private fun generateFreeNumbers(used: Set<String>, from: Int, to: Int, format: String): List<String> { val result = mutableListOf<String>(); for (i in from..to) { val num = String.format(Locale.US, format, i); if (!used.contains(num)) result.add(num) }; return result }
-    private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? { folder.findFile(CONFIG_FILE_NAME)?.let { return it }; return folder.listFiles().firstOrNull { (it.name ?: "").startsWith(CONFIG_FILE_NAME) } }
+    
+    private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedUri = prefs.getString(CONFIG_FILE_URI_KEY, null)
+        if (cachedUri != null) {
+            try {
+                val file = DocumentFile.fromSingleUri(this, Uri.parse(cachedUri))
+                if (file != null && file.exists()) return file
+            } catch (e: Exception) { Log.e(TAG, "Cached URI error", e) }
+        }
+        val file = folder.findFile(CONFIG_FILE_NAME) ?: folder.listFiles().firstOrNull { (it.name ?: "").startsWith(CONFIG_FILE_NAME) }
+        file?.let { prefs.edit { putString(CONFIG_FILE_URI_KEY, it.uri.toString()) } }
+        return file
+    }
+    
     private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? = findConfigFileForRead(folder) ?: folder.createFile("application/json", CONFIG_FILE_NAME)
     private fun updateConfig(transformer: (JSONObject) -> Unit) { val folder = getFolderDocumentFile() ?: return; val configFile = findOrCreateConfigFile(folder) ?: return; val json = readConfigJson(configFile) ?: JSONObject(); transformer(json); contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }; loadUIFromConfig() }
 }
