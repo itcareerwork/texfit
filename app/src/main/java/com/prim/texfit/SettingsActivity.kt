@@ -186,6 +186,13 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
 
+            // ПОРЯДОК: Сортируем выбранные элементы перед сохранением в плейлист
+            selectedItems.sortWith(compareBy(
+                { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
+                { it.numExercise.toIntOrNull() ?: 0 },
+                { it.numFile.toIntOrNull() ?: 0 }
+            ))
+
             val titlesArray = JSONArray()
             selectedItems.forEach { selected ->
                 val entry = JSONArray()
