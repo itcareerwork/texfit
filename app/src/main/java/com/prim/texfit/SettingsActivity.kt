@@ -471,7 +471,7 @@ class SettingsActivity : AppCompatActivity() {
                         val folder = DocumentFile.fromTreeUri(this@SettingsActivity, folderUri) ?: return@withContext null
                         val configFile = findConfigFileForRead(folder) ?: return@withContext null
                         finalJson = readConfigJson(configFile) ?: return@withContext null
-                        finalTs = configFile.lastModified()
+                        finalTs = getFileLastModified(configFile.uri)
                     }
                     
                     val sOpts = mutableListOf<ConfigOption>()
@@ -648,9 +648,12 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val uri = Uri.parse(cachedUri)
                 contentResolver.openInputStream(uri)?.use { return DocumentFile.fromSingleUri(this, uri) }
-            } catch (e: Exception) { Log.d(TAG, "Cached URI not reachable") }
+            } catch (e: Exception) { 
+                Log.d(TAG, "Cached URI unreachable")
+                prefs.edit { remove(CONFIG_FILE_URI_KEY) }
+            }
         }
-        val file = folder.findFile(CONFIG_FILE_NAME) ?: folder.listFiles().firstOrNull { (it.name ?: "").startsWith(CONFIG_FILE_NAME) }
+        val file = folder.findFile(CONFIG_FILE_NAME)
         file?.let { prefs.edit { putString(CONFIG_FILE_URI_KEY, it.uri.toString()) } }
         return file
     }
