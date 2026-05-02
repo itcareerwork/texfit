@@ -69,6 +69,7 @@ class SettingsActivity : AppCompatActivity() {
         
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
+        private var lastLoadResultCache: LoadResult? = null
 
         private fun generateId(): String = (100000..999999).random().toString()
         private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
@@ -294,7 +295,7 @@ class SettingsActivity : AppCompatActivity() {
         tintDialogButtons(dialog)
     }
 
-    override fun onResume() { super.onResume(); loadUIFromConfig(showOverlay = true) }
+    override fun onResume() { super.onResume(); loadUIFromConfig(showOverlay = false) }
 
     private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
         val folder = getFolderDocumentFile() ?: return
@@ -447,6 +448,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadUIFromConfig(showOverlay: Boolean = false) {
         lifecycleScope.launch {
+            if (adapter.currentList.isEmpty()) {
+                lastLoadResultCache?.let { applyLoadResult(it, hideOverlay = false) }
+            }
+
             val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val configUriStr = prefs.getString(CONFIG_FILE_URI_KEY, null)
             val configUri = configUriStr?.let { Uri.parse(it) }
@@ -500,18 +505,33 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             if (result != null) {
-                btnLaunch.visibility = result.btnVisible; tvSetTime.text = result.timeStr; etTopInput.setText(result.topInputText)
-                hCat1.text = getString(R.string.header_session); hCat2.text = getString(R.string.header_exercise); hCat3.text = getString(R.string.header_name); hSize.text = getString(R.string.header_size_label); hNote.text = getString(R.string.header_note_label)
-                sessionOptions = result.sessionOptions.toMutableList(); exerciseOptions = result.exerciseOptions.toMutableList()
-                sessionMap = sessionOptions.associate { it.id to it.name }; exerciseMap = exerciseOptions.associate { it.id to it.name }
-                lastFileModified = result.timestamp
-                adapter.submitList(result.items) { loadingOverlay.visibility = View.GONE }
+                lastLoadResultCache = result
+                applyLoadResult(result, hideOverlay = true)
             } else {
                 loadingOverlay.visibility = View.GONE
                 if (showOverlay) {
                     Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    private fun applyLoadResult(result: LoadResult, hideOverlay: Boolean) {
+        btnLaunch.visibility = result.btnVisible
+        tvSetTime.text = result.timeStr
+        etTopInput.setText(result.topInputText)
+        hCat1.text = getString(R.string.header_session)
+        hCat2.text = getString(R.string.header_exercise)
+        hCat3.text = getString(R.string.header_name)
+        hSize.text = getString(R.string.header_size_label)
+        hNote.text = getString(R.string.header_note_label)
+        sessionOptions = result.sessionOptions.toMutableList()
+        exerciseOptions = result.exerciseOptions.toMutableList()
+        sessionMap = sessionOptions.associate { it.id to it.name }
+        exerciseMap = exerciseOptions.associate { it.id to it.name }
+        lastFileModified = result.timestamp
+        adapter.submitList(result.items) {
+            if (hideOverlay) loadingOverlay.visibility = View.GONE
         }
     }
 
