@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.util.Size
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
@@ -31,8 +30,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.OutputStreamWriter
 import java.util.Calendar
+import java.util.concurrent.Semaphore
 
 class MainActivity : AppCompatActivity() {
 
@@ -50,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
         private const val KEY_LAST_LAUNCH = "last_auto_launch_ts"
+        private val thumbnailDecodeSemaphore = Semaphore(2)
     }
 
     data class PlaylistItem(val id: String, val uri: Uri, val isWatched: Boolean, val displayName: String, val lastPos: Int, val segmentPlayed: Long)
@@ -263,15 +263,29 @@ class MainActivity : AppCompatActivity() {
 
                 thumbnailJob = lifecycleScope.launch {
                     val bitmap = withContext(Dispatchers.IO) {
-                        var retriever: MediaMetadataRetriever? = null
+                        thumbnailDecodeSemaphore.acquire()
                         try {
-                            retriever = MediaMetadataRetriever()
-                            retriever.setDataSource(this@MainActivity, item.uri)
-                            retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        } catch (_: Exception) {
-                            null
+                            var retriever: MediaMetadataRetriever? = null
+                            try {
+                                retriever = MediaMetadataRetriever()
+                                retriever.setDataSource(this@MainActivity, item.uri)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                                    retriever.getScaledFrameAtTime(
+                                        1000000,
+                                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                                        320,
+                                        180
+                                    )
+                                } else {
+                                    retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                }
+                            } catch (_: Exception) {
+                                null
+                            } finally {
+                                try { retriever?.release() } catch (_: Exception) {}
+                            }
                         } finally {
-                            try { retriever?.release() } catch (_: Exception) {}
+                            thumbnailDecodeSemaphore.release()
                         }
                     }
 
