@@ -446,11 +446,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun loadUIFromConfig(showOverlay: Boolean = false) {
-        val folderUri = getFolderUri() ?: return
         lifecycleScope.launch {
             val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val configUriStr = prefs.getString(CONFIG_FILE_URI_KEY, null)
             val configUri = configUriStr?.let { Uri.parse(it) }
+
+            if (configUri == null) {
+                if (showOverlay) {
+                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
 
             val currentTs = withContext(Dispatchers.IO) { if (configUri != null) getFileLastModified(configUri) else -1L }
             if (currentTs != -1L && currentTs == lastFileModified && adapter.currentList.isNotEmpty()) return@launch
@@ -459,20 +465,14 @@ class SettingsActivity : AppCompatActivity() {
             
             val result = withContext(Dispatchers.IO) {
                 try {
-                    val jsonStr = if (configUri != null) {
-                        try { contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } } catch (e: Exception) { null }
-                    } else null
-
-                    val finalJson: JSONObject
-                    val finalTs: Long
-                    if (jsonStr != null) {
-                        finalJson = JSONObject(jsonStr); finalTs = currentTs
-                    } else {
-                        val folder = DocumentFile.fromTreeUri(this@SettingsActivity, folderUri) ?: return@withContext null
-                        val configFile = findConfigFileForRead(folder) ?: return@withContext null
-                        finalJson = readConfigJson(configFile) ?: return@withContext null
-                        finalTs = getFileLastModified(configFile.uri)
+                    val jsonStr = try { contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } } catch (e: Exception) { null }
+                    if (jsonStr == null) {
+                        prefs.edit { remove(CONFIG_FILE_URI_KEY) }
+                        return@withContext null
                     }
+
+                    val finalJson = JSONObject(jsonStr)
+                    val finalTs = currentTs
                     
                     val sOpts = mutableListOf<ConfigOption>()
                     finalJson.optJSONArray("session_options")?.let { arr ->
@@ -506,7 +506,12 @@ class SettingsActivity : AppCompatActivity() {
                 sessionMap = sessionOptions.associate { it.id to it.name }; exerciseMap = exerciseOptions.associate { it.id to it.name }
                 lastFileModified = result.timestamp
                 adapter.submitList(result.items) { loadingOverlay.visibility = View.GONE }
-            } else { loadingOverlay.visibility = View.GONE }
+            } else {
+                loadingOverlay.visibility = View.GONE
+                if (showOverlay) {
+                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
