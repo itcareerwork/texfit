@@ -546,31 +546,69 @@ class SettingsActivity : AppCompatActivity() {
     private data class LoadResult(val items: List<VideoItem>, val sessionOptions: List<ConfigOption>, val exerciseOptions: List<ConfigOption>, val btnVisible: Int, val timeStr: String, val timestamp: Long, val topInputText: String)
 
     private fun performFullRefresh() {
-        val folder = getFolderDocumentFile() ?: return
-        val configFile = findOrCreateConfigFile(folder) ?: return
-        val json = readConfigJson(configFile) ?: JSONObject()
-        val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
-        val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
-        val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
-        val currentItems = mutableListOf<VideoItem>()
-        for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this, loadTimings = false))
-        val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
-        val existingNames = updatedItems.map { it.fileName }.toSet()
-        filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
-            updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
+        loadingOverlay.visibility = View.VISIBLE
+        lifecycleScope.launch(Dispatchers.IO) {
+            val success = try {
+                val folder = getFolderDocumentFile() ?: return@launch
+                val configFile = findOrCreateConfigFile(folder) ?: return@launch
+                val json = readConfigJson(configFile) ?: JSONObject()
+                val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
+                val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
+                val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
+                val currentItems = mutableListOf<VideoItem>()
+                for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this@SettingsActivity, loadTimings = false))
+                val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
+                val existingNames = updatedItems.map { it.fileName }.toSet()
+                filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
+                    updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
+                }
+                saveToConfig(folder, updatedItems)
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Refresh error", e)
+                false
+            }
+
+            withContext(Dispatchers.Main) {
+                if (success) {
+                    loadUIFromConfig(showOverlay = true)
+                    Toast.makeText(this@SettingsActivity, getString(R.string.updated), Toast.LENGTH_SHORT).show()
+                } else {
+                    loadingOverlay.visibility = View.GONE
+                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                }
+            }
         }
-        saveToConfig(folder, updatedItems); loadUIFromConfig(showOverlay = true); Toast.makeText(this, getString(R.string.updated), Toast.LENGTH_SHORT).show()
     }
 
     private fun performSort() {
-        val folder = getFolderDocumentFile() ?: return
-        val currentItems = adapter.currentList.toMutableList()
-        val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isActive }
-            .thenBy { item -> extractNumber(sessionMap[item.sessionId] ?: "") }
-            .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
-            .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
-            .thenBy { it.fileName })
-        saveToConfig(folder, sortedItems); loadUIFromConfig(showOverlay = true); Toast.makeText(this, getString(R.string.sorted_msg), Toast.LENGTH_SHORT).show()
+        loadingOverlay.visibility = View.VISIBLE
+        lifecycleScope.launch(Dispatchers.IO) {
+            val success = try {
+                val folder = getFolderDocumentFile() ?: return@launch
+                val currentItems = adapter.currentList.toMutableList()
+                val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isActive }
+                    .thenBy { item -> extractNumber(sessionMap[item.sessionId] ?: "") }
+                    .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
+                    .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
+                    .thenBy { it.fileName })
+                saveToConfig(folder, sortedItems)
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Sort error", e)
+                false
+            }
+
+            withContext(Dispatchers.Main) {
+                loadingOverlay.visibility = View.GONE
+                if (success) {
+                    loadUIFromConfig(showOverlay = false)
+                    Toast.makeText(this@SettingsActivity, getString(R.string.sorted_msg), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
