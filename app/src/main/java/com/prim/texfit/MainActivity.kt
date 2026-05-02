@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -203,6 +204,7 @@ class MainActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_settings -> {
                 startActivity(Intent(this, SettingsActivity::class.java))
+                overridePendingTransition(0, 0)
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -229,19 +231,8 @@ class MainActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = getItem(position)
             holder.tvDisplayName.text = item.displayName
-            
-            var retriever: MediaMetadataRetriever? = null
-            try {
-                retriever = MediaMetadataRetriever()
-                retriever.setDataSource(this@MainActivity, item.uri)
-                val bitmap = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                if (bitmap != null) holder.imageView.setImageBitmap(bitmap)
-                else holder.imageView.setImageResource(android.R.drawable.ic_menu_report_image)
-            } catch (e: Exception) {
-                holder.imageView.setImageResource(android.R.drawable.ic_menu_report_image)
-            } finally {
-                try { retriever?.release() } catch (_: Exception) {}
-            }
+
+            holder.bindThumbnail(item)
 
             holder.imageView.alpha = if (item.isWatched) 0.3f else 1.0f
             holder.ivCheck.setImageResource(if (item.isWatched) android.R.drawable.checkbox_on_background else android.R.drawable.checkbox_off_background)
@@ -262,6 +253,34 @@ class MainActivity : AppCompatActivity() {
             val imageView: ImageView = itemView.findViewById(R.id.iv_thumbnail)
             val ivCheck: ImageView = itemView.findViewById(R.id.iv_watched_check)
             val tvDisplayName: TextView = itemView.findViewById(R.id.tv_debug_info)
+            private var thumbnailJob: Job? = null
+            private var boundItemId: String? = null
+
+            fun bindThumbnail(item: PlaylistItem) {
+                boundItemId = item.id
+                thumbnailJob?.cancel()
+                imageView.setImageResource(android.R.drawable.ic_menu_report_image)
+
+                thumbnailJob = lifecycleScope.launch {
+                    val bitmap = withContext(Dispatchers.IO) {
+                        var retriever: MediaMetadataRetriever? = null
+                        try {
+                            retriever = MediaMetadataRetriever()
+                            retriever.setDataSource(this@MainActivity, item.uri)
+                            retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        } catch (_: Exception) {
+                            null
+                        } finally {
+                            try { retriever?.release() } catch (_: Exception) {}
+                        }
+                    }
+
+                    if (boundItemId == item.id) {
+                        if (bitmap != null) imageView.setImageBitmap(bitmap)
+                        else imageView.setImageResource(android.R.drawable.ic_menu_report_image)
+                    }
+                }
+            }
         }
     }
 

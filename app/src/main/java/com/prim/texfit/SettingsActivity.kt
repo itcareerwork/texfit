@@ -295,7 +295,15 @@ class SettingsActivity : AppCompatActivity() {
         tintDialogButtons(dialog)
     }
 
-    override fun onResume() { super.onResume(); loadUIFromConfig(showOverlay = false) }
+    override fun onResume() {
+        super.onResume()
+        loadUIFromConfig(showOverlay = false)
+    }
+
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(0, 0)
+    }
 
     private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
         val folder = getFolderDocumentFile() ?: return
