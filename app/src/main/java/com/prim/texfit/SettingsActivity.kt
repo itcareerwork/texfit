@@ -284,7 +284,6 @@ class SettingsActivity : AppCompatActivity() {
         tvSetTime.setOnClickListener { showTimePicker() }
 
         loadAndDisplaySelectedFolder()
-        loadUIFromConfig(showOverlay = true)
     }
 
     private fun showHelpDialog() {
@@ -448,7 +447,6 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadUIFromConfig(showOverlay: Boolean = false) {
         val folderUri = getFolderUri() ?: return
-        if (showOverlay) loadingOverlay.visibility = View.VISIBLE
         
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -458,6 +456,10 @@ class SettingsActivity : AppCompatActivity() {
                     
                     val currentTimestamp = configFile.lastModified()
                     if (currentTimestamp == lastFileModified && adapter.currentList.isNotEmpty()) return@withContext null
+
+                    if (showOverlay) withContext(Dispatchers.Main) {
+                        loadingOverlay.visibility = View.VISIBLE
+                    }
 
                     val json = readConfigJson(configFile) ?: return@withContext null
                     
