@@ -20,10 +20,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.Toolbar
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
@@ -64,11 +68,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (isFirstResume) {
-            checkAndPerformAutoLaunch()
-            isFirstResume = false
+        lifecycleScope.launch {
+            if (isFirstResume) {
+                withContext(Dispatchers.IO) {
+                    checkAndPerformAutoLaunch()
+                }
+                isFirstResume = false
+            }
+            loadPlaylistFromConfig()
         }
-        loadPlaylistFromConfig()
     }
 
     private fun checkAndPerformAutoLaunch() {
@@ -109,12 +117,7 @@ class MainActivity : AppCompatActivity() {
                 json = JSONObject(inputStream.bufferedReader().readText())
             } ?: return
 
-            // Применяем логику: обновление curr и состояний циклов теперь идет только в Prefs
-            // Плейлист также сохраняется во внутреннюю память внутри этого метода
             SettingsActivity.applyLaunchLogic(json, this)
-            
-            // Файл texfit.cfg больше не перезаписываем автоматически, 
-            // так как все "горячие" данные теперь в SharedPreferences
             
         } catch (e: Exception) { Log.e(TAG, "Daily update failed", e) }
     }
@@ -124,44 +127,55 @@ class MainActivity : AppCompatActivity() {
         val playlistJsonStr = prefs.getString(KEY_PLAYLIST, null) ?: return
         
         val folderUriStr = prefs.getString(SELECTED_FOLDER_URI_KEY, null) ?: return
-        val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
-        val configFile = findConfigFile(folder) ?: return
-
-        try {
-            val titlesArray = JSONArray(playlistJsonStr)
-            
-            contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
-                val json = JSONObject(inputStream.bufferedReader().readText())
-                val videoItemsArray = json.optJSONArray("video_items") ?: return
-
-                val videoItemsMap = mutableMapOf<String, JSONObject>()
-                for (i in 0 until videoItemsArray.length()) {
-                    val item = videoItemsArray.getJSONObject(i)
-                    videoItemsMap[item.optString("id")] = item
-                }
-
-                val playlist = mutableListOf<PlaylistItem>()
-                for (i in 0 until titlesArray.length()) {
-                    val entry = titlesArray.optJSONArray(i) ?: continue
-                    val id = entry.optString(0)
-                    val status = entry.optInt(1, 0)
-                    val lastPos = entry.optInt(2, 0) 
-                    val segmentPlayed = entry.optLong(3, 0L)
+        
+        lifecycleScope.launch {
+            val playlist = withContext(Dispatchers.IO) {
+                try {
+                    val folder = DocumentFile.fromTreeUri(this@MainActivity, Uri.parse(folderUriStr)) ?: return@withContext null
+                    val configFile = findConfigFile(folder) ?: return@withContext null
+                    val titlesArray = JSONArray(playlistJsonStr)
                     
-                    val itemJson = videoItemsMap[id] ?: continue
-                    val fileName = itemJson.optString("f_n")
-                    var displayName = itemJson.optString("c_n")
-                    if (displayName.isEmpty()) displayName = fileName
+                    contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
+                        val json = JSONObject(inputStream.bufferedReader().readText())
+                        val videoItemsArray = json.optJSONArray("video_items") ?: return@withContext null
 
-                    if (fileName.isNotEmpty()) {
-                        folder.findFile(fileName)?.uri?.let { uri ->
-                            playlist.add(PlaylistItem(id, uri, status == 1, displayName, lastPos, segmentPlayed))
+                        val videoItemsMap = mutableMapOf<String, JSONObject>()
+                        for (i in 0 until videoItemsArray.length()) {
+                            val item = videoItemsArray.getJSONObject(i)
+                            videoItemsMap[item.optString("id")] = item
                         }
+
+                        val resultList = mutableListOf<PlaylistItem>()
+                        for (i in 0 until titlesArray.length()) {
+                            val entry = titlesArray.optJSONArray(i) ?: continue
+                            val id = entry.optString(0)
+                            val status = entry.optInt(1, 0)
+                            val lastPos = entry.optInt(2, 0) 
+                            val segmentPlayed = entry.optLong(3, 0L)
+                            
+                            val itemJson = videoItemsMap[id] ?: continue
+                            val fileName = itemJson.optString("f_n")
+                            var displayName = itemJson.optString("c_n")
+                            if (displayName.isEmpty()) displayName = fileName
+
+                            if (fileName.isNotEmpty()) {
+                                folder.findFile(fileName)?.uri?.let { uri ->
+                                    resultList.add(PlaylistItem(id, uri, status == 1, displayName, lastPos, segmentPlayed))
+                                }
+                            }
+                        }
+                        resultList
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Playlist loading failed", e)
+                    null
                 }
-                adapter.submitList(playlist)
             }
-        } catch (e: Exception) { Log.e(TAG, "Playlist loading failed", e) }
+            
+            playlist?.let {
+                adapter.submitList(it)
+            }
+        }
     }
 
     private fun toggleWatchedStatus(position: Int) {
