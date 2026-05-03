@@ -225,6 +225,7 @@ class SettingsActivity : AppCompatActivity() {
     private var sessionMap = mapOf<String, String>()
     private var exerciseMap = mapOf<String, String>()
     private var activeExercisesOrder = mutableListOf<String>()
+    private var cachedConfigUri: Uri? = null
 
     private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
@@ -232,6 +233,7 @@ class SettingsActivity : AppCompatActivity() {
                 contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 saveSelectedFolderUri(it)
                 displaySelectedFolder(it)
+                cachedConfigUri = null
                 loadUIFromConfig(showOverlay = true)
             } catch (e: Exception) { Log.e(TAG, getString(R.string.error_permission), e) }
         }
@@ -251,6 +253,14 @@ class SettingsActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+
+        val intentUri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra("config_uri", Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra("config_uri")
+        }
+        if (intentUri != null) cachedConfigUri = intentUri
 
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -305,27 +315,32 @@ class SettingsActivity : AppCompatActivity() {
         overridePendingTransition(0, 0)
     }
 
+    private fun getConfigFileUri(forWrite: Boolean = false): Uri? {
+        if (cachedConfigUri != null) return cachedConfigUri
+        val folder = getFolderDocumentFile() ?: return null
+        val file = if (forWrite) findOrCreateConfigFile(folder) else findConfigFileForRead(folder)
+        return file?.uri
+    }
+
     private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
-        val folder = getFolderDocumentFile() ?: return
-        val configFile = findOrCreateConfigFile(folder) ?: return
-        val json = readConfigJson(configFile) ?: return
+        val configUri = getConfigFileUri(forWrite = true) ?: return
+        val json = readConfigJson(configUri) ?: return
         val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
         val items = mutableListOf<VideoItem>()
         for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), this, loadTimings = true))
         val index = items.indexOfFirst { it.id == id }
         if (index != -1) {
             items[index] = transformer(items[index])
-            saveToConfig(folder, items)
+            saveToConfig(configUri, items)
             loadUIFromConfig()
         }
     }
 
     private fun performLaunchStep() {
-        val folder = getFolderDocumentFile() ?: return
-        val configFile = findConfigFileForRead(folder) ?: return
-        val json = readConfigJson(configFile) ?: return
+        val configUri = getConfigFileUri() ?: return
+        val json = readConfigJson(configUri) ?: return
         val updated = applyLaunchLogic(json, this)
-        contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer ->
+        contentResolver.openOutputStream(configUri, "wt")?.use { writer ->
             OutputStreamWriter(writer).use { it.write(updated.toString(4)) }
         }
         loadUIFromConfig(showOverlay = true)
@@ -392,12 +407,12 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun performBackup() {
-        val folder = getFolderDocumentFile() ?: return
-        val configFile = findConfigFileForRead(folder) ?: return
+        val configUri = getConfigFileUri() ?: return
         try {
-            val content = contentResolver.openInputStream(configFile.uri)?.use { it.bufferedReader().readText() } ?: return
+            val content = contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } ?: return
             val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
             val backupName = "${CONFIG_FILE_NAME}_${dateStr}.backup"
+            val folder = getFolderDocumentFile() ?: return
             folder.findFile(backupName)?.delete()
             val backupFile = folder.createFile("application/octet-stream", backupName) ?: return
             contentResolver.openOutputStream(backupFile.uri)?.use { it.write(content.toByteArray()) }
@@ -406,28 +421,26 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun restoreBackup(backupFile: DocumentFile) {
-        val folder = getFolderDocumentFile() ?: return
+        val configUri = getConfigFileUri(forWrite = true) ?: return
         try {
             val content = contentResolver.openInputStream(backupFile.uri)?.use { it.bufferedReader().readText() } ?: return
-            val configFile = findOrCreateConfigFile(folder) ?: return
-            contentResolver.openOutputStream(configFile.uri, "wt")?.use { it.write(content.toByteArray()) }
+            contentResolver.openOutputStream(configUri, "wt")?.use { it.write(content.toByteArray()) }
             loadUIFromConfig(showOverlay = true); Toast.makeText(this, getString(R.string.backup_restored, backupFile.name), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) { Log.e(TAG, "Restore error", e) }
     }
 
     private fun addSingleFile(uri: Uri) {
-        val folder = getFolderDocumentFile() ?: return
+        val configUri = getConfigFileUri(forWrite = true) ?: return
         try {
             val pickedFile = DocumentFile.fromSingleUri(this, uri) ?: return
             val name = pickedFile.name ?: "video.mp4"
             if (!name.endsWith(".mp4", ignoreCase = true)) { Toast.makeText(this, getString(R.string.file_not_mp4), Toast.LENGTH_SHORT).show(); return }
-            val configFile = findOrCreateConfigFile(folder) ?: return
-            val json = readConfigJson(configFile) ?: JSONObject()
+            val json = readConfigJson(configUri) ?: JSONObject()
             val array = json.optJSONArray("video_items") ?: JSONArray()
             val items = mutableListOf<VideoItem>()
             for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this, loadTimings = true))
             items.add(VideoItem(id = generateId(), fileName = name, fileSizeRaw = pickedFile.length()))
-            saveToConfig(folder, items)
+            saveToConfig(configUri, items)
             loadUIFromConfig(showOverlay = true)
         } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
     }
@@ -460,9 +473,7 @@ class SettingsActivity : AppCompatActivity() {
                 lastLoadResultCache?.let { applyLoadResult(it, hideOverlay = false) }
             }
 
-            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val configUriStr = prefs.getString(CONFIG_FILE_URI_KEY, null)
-            val configUri = configUriStr?.let { Uri.parse(it) }
+            val configUri = withContext(Dispatchers.IO) { getConfigFileUri() }
 
             if (configUri == null) {
                 if (showOverlay) {
@@ -471,7 +482,7 @@ class SettingsActivity : AppCompatActivity() {
                 return@launch
             }
 
-            val currentTs = withContext(Dispatchers.IO) { if (configUri != null) getFileLastModified(configUri) else -1L }
+            val currentTs = withContext(Dispatchers.IO) { getFileLastModified(configUri) }
             if (currentTs != -1L && currentTs == lastFileModified && adapter.currentList.isNotEmpty()) return@launch
 
             if (showOverlay) loadingOverlay.visibility = View.VISIBLE
@@ -480,7 +491,8 @@ class SettingsActivity : AppCompatActivity() {
                 try {
                     val jsonStr = try { contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } } catch (e: Exception) { null }
                     if (jsonStr == null) {
-                        prefs.edit { remove(CONFIG_FILE_URI_KEY) }
+                        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { remove(CONFIG_FILE_URI_KEY) }
+                        cachedConfigUri = null
                         return@withContext null
                     }
 
@@ -506,7 +518,7 @@ class SettingsActivity : AppCompatActivity() {
                     val eMap = eOpts.associate { it.id to it.name }
                     val topText = calculateTopInputText(itemsList, eMap)
                     val btnVis = if (finalJson.optInt("button", 0) == 1) View.VISIBLE else View.GONE
-                    val tTime = prefs.getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
+                    val tTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
                     
                     LoadResult(itemsList, sOpts, eOpts, btnVis, tTime, finalTs, topText)
                 } catch (e: Exception) { Log.e(TAG, "Load error", e); null }
@@ -543,15 +555,40 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedUriStr = cachedConfigUri?.toString() ?: prefs.getString(CONFIG_FILE_URI_KEY, null)
+        if (cachedUriStr != null) {
+            try {
+                val uri = Uri.parse(cachedUriStr)
+                contentResolver.openInputStream(uri)?.use { 
+                    val file = DocumentFile.fromSingleUri(this, uri)
+                    if (cachedConfigUri == null) cachedConfigUri = uri
+                    return file 
+                }
+            } catch (e: Exception) { 
+                Log.d(TAG, "Cached URI unreachable")
+                prefs.edit { remove(CONFIG_FILE_URI_KEY) }
+                cachedConfigUri = null
+            }
+        }
+        val file = folder.findFile(CONFIG_FILE_NAME)
+        file?.let { 
+            prefs.edit { putString(CONFIG_FILE_URI_KEY, it.uri.toString()) }
+            cachedConfigUri = it.uri
+        }
+        return file
+    }
+
     private data class LoadResult(val items: List<VideoItem>, val sessionOptions: List<ConfigOption>, val exerciseOptions: List<ConfigOption>, val btnVisible: Int, val timeStr: String, val timestamp: Long, val topInputText: String)
 
     private fun performFullRefresh() {
         loadingOverlay.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
             val success = try {
+                val configUri = getConfigFileUri(forWrite = true) ?: return@launch
                 val folder = getFolderDocumentFile() ?: return@launch
-                val configFile = findOrCreateConfigFile(folder) ?: return@launch
-                val json = readConfigJson(configFile) ?: JSONObject()
+                val json = readConfigJson(configUri) ?: JSONObject()
                 val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
                 val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
                 val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
@@ -562,7 +599,7 @@ class SettingsActivity : AppCompatActivity() {
                 filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
                     updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
                 }
-                saveToConfig(folder, updatedItems)
+                saveToConfig(configUri, updatedItems)
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Refresh error", e)
@@ -585,14 +622,14 @@ class SettingsActivity : AppCompatActivity() {
         loadingOverlay.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
             val success = try {
-                val folder = getFolderDocumentFile() ?: return@launch
+                val configUri = getConfigFileUri(forWrite = true) ?: return@launch
                 val currentItems = adapter.currentList.toMutableList()
                 val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isActive }
                     .thenBy { item -> extractNumber(sessionMap[item.sessionId] ?: "") }
                     .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
                     .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
                     .thenBy { it.fileName })
-                saveToConfig(folder, sortedItems)
+                saveToConfig(configUri, sortedItems)
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Sort error", e)
@@ -611,16 +648,15 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveToConfig(folder: DocumentFile, items: List<VideoItem>) {
+    private fun saveToConfig(uri: Uri, items: List<VideoItem>) {
         try {
-            val configFile = findOrCreateConfigFile(folder) ?: return
-            val oldJson = readConfigJson(configFile) ?: JSONObject()
+            val oldJson = readConfigJson(uri) ?: JSONObject()
             val json = JSONObject()
             json.put("button", oldJson.optInt("button", 0)).put("curr_step", oldJson.optInt("curr_step", 1))
             val array = JSONArray(); items.forEach { array.put(it.toJson()) }; json.put("video_items", array)
             val sArr = JSONArray(); sessionOptions.forEach { sArr.put(JSONObject().apply { put("id", it.id); put("name", it.name) }) }; json.put("session_options", sArr)
             val eArr = JSONArray(); exerciseOptions.forEach { eArr.put(JSONObject().apply { put("id", it.id); put("name", it.name) }) }; json.put("exercise_options", eArr)
-            contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
+            contentResolver.openOutputStream(uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
         } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
     }
 
@@ -632,6 +668,11 @@ class SettingsActivity : AppCompatActivity() {
             else -> super.onOptionsItemSelected(item)
         }
     }
+
+    private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? = findConfigFileForRead(folder) ?: folder.createFile("application/json", CONFIG_FILE_NAME)
+    private fun updateConfig(transformer: (JSONObject) -> Unit) { val uri = getConfigFileUri(forWrite = true) ?: return; val json = readConfigJson(uri) ?: JSONObject(); transformer(json); contentResolver.openOutputStream(uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }; loadUIFromConfig(showOverlay = true) }
+
+    private fun readConfigJson(uri: Uri): JSONObject? = try { contentResolver.openInputStream(uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) } } catch (e: Exception) { Log.e(TAG, getString(R.string.error_reading), e); null }
 
     data class Timing(val time: Int, var max: Long = 0L, var curr: Long = 0L, var step: Long = 0L, var multType: Int = 0, var multVal: Int = 1, var isEnabled: Boolean = false)
 
@@ -683,10 +724,10 @@ class SettingsActivity : AppCompatActivity() {
                     val selected = displayOptions[i] as ConfigOption; val builder = AlertDialog.Builder(this@SettingsActivity).setTitle(if (title == getString(R.string.header_exercise)) getString(R.string.exercise_title_format, selected.name) else getString(R.string.delete_option_title))
                     if (title == getString(R.string.header_exercise)) {
                         val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }; val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }; leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f }); val leftValue = TextView(this@SettingsActivity).apply { text = getCategoryState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; leftValue.setOnClickListener { v -> val optionsList = (0..999).map { String.format(Locale.US, "%03d", it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> leftValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; leftBox.addView(leftValue); val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }; rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f }); val rightValue = TextView(this@SettingsActivity).apply { text = getResetState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; rightValue.setOnClickListener { v -> val optionsList = listOf("000", "001"); val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> rightValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
-                        builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton; saveToConfig(folder, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it }); loadUIFromConfig() }
-                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); val folder = getFolderDocumentFile() ?: return@setPositiveButton; saveToConfig(folder, currentList); loadUIFromConfig() }
-                    } else { builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton; saveToConfig(folder, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it }); loadUIFromConfig() } }
-                    builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val folder = getFolderDocumentFile() ?: return@setNeutralButton; saveToConfig(folder, currentList.map { if (title == getString(R.string.header_session)) { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it } else { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it } }); loadUIFromConfig() }
+                        builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val configUri = getConfigFileUri(forWrite = true) ?: return@setNeutralButton; saveToConfig(configUri, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it }); loadUIFromConfig() }
+                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); val configUri = getConfigFileUri(forWrite = true) ?: return@setPositiveButton; saveToConfig(configUri, currentList); loadUIFromConfig() }
+                    } else { builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val configUri = getConfigFileUri(forWrite = true) ?: return@setNeutralButton; saveToConfig(configUri, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it }); loadUIFromConfig() } }
+                    builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val configUri = getConfigFileUri(forWrite = true) ?: return@setNeutralButton; saveToConfig(configUri, currentList.map { if (title == getString(R.string.header_session)) { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it } else { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it } }); loadUIFromConfig() }
                     builder.setNegativeButton(getString(R.string.dialog_cancel), null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
                 }
                 dialogView.addView(listView); dialogView.addView(ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_input_add); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER; topMargin = 16 }; setOnClickListener { onAdd(); alertDialog?.dismiss() } }); alertDialog = AlertDialog.Builder(this@SettingsActivity).setTitle(title).setView(dialogView).create(); alertDialog?.show(); val lp = WindowManager.LayoutParams(); lp.copyFrom(alertDialog?.window?.attributes); lp.width = Math.min((300 * resources.displayMetrics.density).toInt(), (resources.displayMetrics.widthPixels * 0.9).toInt()); alertDialog?.window?.attributes = lp
@@ -708,29 +749,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun getFolderDocumentFile(): DocumentFile? = getFolderUri()?.let { DocumentFile.fromTreeUri(this, it) }
-    private fun readConfigJson(configFile: DocumentFile): JSONObject? = try { contentResolver.openInputStream(configFile.uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) } } catch (e: Exception) { Log.e(TAG, getString(R.string.error_reading), e); null }
     private fun tintDialogButtons(dialog: AlertDialog, neutralIsDestructive: Boolean = false) { dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark)); dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark)); if (neutralIsDestructive) dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark)) }
     private fun generateFreeNumbers(used: Set<String>, from: Int, to: Int, format: String): List<String> { val result = mutableListOf<String>(); for (i in from..to) { val num = String.format(Locale.US, format, i); if (!used.contains(num)) result.add(num) }; return result }
-    
-    private fun findConfigFileForRead(folder: DocumentFile): DocumentFile? {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val cachedUri = prefs.getString(CONFIG_FILE_URI_KEY, null)
-        if (cachedUri != null) {
-            try {
-                val uri = Uri.parse(cachedUri)
-                contentResolver.openInputStream(uri)?.use { return DocumentFile.fromSingleUri(this, uri) }
-            } catch (e: Exception) { 
-                Log.d(TAG, "Cached URI unreachable")
-                prefs.edit { remove(CONFIG_FILE_URI_KEY) }
-            }
-        }
-        val file = folder.findFile(CONFIG_FILE_NAME)
-        file?.let { prefs.edit { putString(CONFIG_FILE_URI_KEY, it.uri.toString()) } }
-        return file
-    }
-    
-    private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? = findConfigFileForRead(folder) ?: folder.createFile("application/json", CONFIG_FILE_NAME)
-    private fun updateConfig(transformer: (JSONObject) -> Unit) { val folder = getFolderDocumentFile() ?: return; val configFile = findOrCreateConfigFile(folder) ?: return; val json = readConfigJson(configFile) ?: JSONObject(); transformer(json); contentResolver.openOutputStream(configFile.uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }; loadUIFromConfig(showOverlay = true) }
 }
 
 class VideoItemDiffCallback : DiffUtil.ItemCallback<SettingsActivity.VideoItem>() { override fun areItemsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem.id == newItem.id; override fun areContentsTheSame(oldItem: SettingsActivity.VideoItem, newItem: SettingsActivity.VideoItem) = oldItem == newItem }
