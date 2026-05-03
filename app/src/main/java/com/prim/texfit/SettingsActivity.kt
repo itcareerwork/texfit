@@ -311,7 +311,7 @@ class SettingsActivity : AppCompatActivity() {
         val json = readConfigJson(configFile) ?: return
         val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
         val items = mutableListOf<VideoItem>()
-        for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), this, loadTimings = false))
+        for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), this, loadTimings = true))
         val index = items.indexOfFirst { it.id == id }
         if (index != -1) {
             items[index] = transformer(items[index])
@@ -425,7 +425,7 @@ class SettingsActivity : AppCompatActivity() {
             val json = readConfigJson(configFile) ?: JSONObject()
             val array = json.optJSONArray("video_items") ?: JSONArray()
             val items = mutableListOf<VideoItem>()
-            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this, loadTimings = false))
+            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this, loadTimings = true))
             items.add(VideoItem(id = generateId(), fileName = name, fileSizeRaw = pickedFile.length()))
             saveToConfig(folder, items)
             loadUIFromConfig(showOverlay = true)
@@ -501,7 +501,7 @@ class SettingsActivity : AppCompatActivity() {
 
                     val array = finalJson.optJSONArray("video_items") ?: JSONArray()
                     val itemsList = mutableListOf<VideoItem>()
-                    for (i in 0 until array.length()) itemsList.add(VideoItem.fromJson(array.getJSONObject(i), this@SettingsActivity, loadTimings = false))
+                    for (i in 0 until array.length()) itemsList.add(VideoItem.fromJson(array.getJSONObject(i), this@SettingsActivity, loadTimings = true))
                     
                     val eMap = eOpts.associate { it.id to it.name }
                     val topText = calculateTopInputText(itemsList, eMap)
@@ -556,7 +556,7 @@ class SettingsActivity : AppCompatActivity() {
                 val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
                 val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
                 val currentItems = mutableListOf<VideoItem>()
-                for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this@SettingsActivity, loadTimings = false))
+                for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this@SettingsActivity, loadTimings = true))
                 val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
                 val existingNames = updatedItems.map { it.fileName }.toSet()
                 filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
