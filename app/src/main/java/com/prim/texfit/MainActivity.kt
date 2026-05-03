@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
         private const val KEY_LAST_LAUNCH = "last_auto_launch_ts"
+        private const val CONFIG_FILE_URI_KEY = "configFileUri"
         private val thumbnailDecodeSemaphore = Semaphore(2)
     }
 
@@ -108,13 +109,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performDailyUpdate() {
-        val folderUriStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(SELECTED_FOLDER_URI_KEY, null) ?: return
-        val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return
-        val configFile = findConfigFile(folder) ?: return
+        val configUri = getConfigFileUri() ?: return
 
         try {
             val json: JSONObject
-            contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
+            contentResolver.openInputStream(configUri)?.use { inputStream ->
                 json = JSONObject(inputStream.bufferedReader().readText())
             } ?: return
 
@@ -123,20 +122,46 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) { Log.e(TAG, "Daily update failed", e) }
     }
 
+    private fun getFileLastModified(uri: Uri): Long {
+        return try {
+            contentResolver.query(uri, arrayOf(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                    if (index != -1) cursor.getLong(index) else 0L
+                } else -1L
+            } ?: -1L
+        } catch (e: Exception) { -1L }
+    }
+
+    private fun getConfigFileUri(): Uri? {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedUriStr = prefs.getString(CONFIG_FILE_URI_KEY, null)
+        if (cachedUriStr != null) {
+            val uri = Uri.parse(cachedUriStr)
+            if (getFileLastModified(uri) != -1L) return uri
+            else prefs.edit().remove(CONFIG_FILE_URI_KEY).apply()
+        }
+
+        val folderUriStr = prefs.getString(SELECTED_FOLDER_URI_KEY, null) ?: return null
+        val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return null
+        val configFile = findConfigFile(folder) ?: return null
+        
+        prefs.edit().putString(CONFIG_FILE_URI_KEY, configFile.uri.toString()).apply()
+        return configFile.uri
+    }
+
     private fun loadPlaylistFromConfig() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val playlistJsonStr = prefs.getString(KEY_PLAYLIST, null) ?: return
-        
         val folderUriStr = prefs.getString(SELECTED_FOLDER_URI_KEY, null) ?: return
         
         lifecycleScope.launch {
             val playlist = withContext(Dispatchers.IO) {
                 try {
-                    val folder = DocumentFile.fromTreeUri(this@MainActivity, Uri.parse(folderUriStr)) ?: return@withContext null
-                    val configFile = findConfigFile(folder) ?: return@withContext null
+                    val configUri = getConfigFileUri() ?: return@withContext null
                     val titlesArray = JSONArray(playlistJsonStr)
                     
-                    contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
+                    contentResolver.openInputStream(configUri)?.use { inputStream ->
                         val json = JSONObject(inputStream.bufferedReader().readText())
                         val videoItemsArray = json.optJSONArray("video_items") ?: return@withContext null
 
@@ -146,6 +171,7 @@ class MainActivity : AppCompatActivity() {
                             videoItemsMap[item.optString("id")] = item
                         }
 
+                        val folder = DocumentFile.fromTreeUri(this@MainActivity, Uri.parse(folderUriStr)) ?: return@withContext null
                         val resultList = mutableListOf<PlaylistItem>()
                         for (i in 0 until titlesArray.length()) {
                             val entry = titlesArray.optJSONArray(i) ?: continue
@@ -203,7 +229,11 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_settings -> {
-                startActivity(Intent(this, SettingsActivity::class.java))
+                val intent = Intent(this, SettingsActivity::class.java)
+                getConfigFileUri()?.let { uri ->
+                    intent.putExtra("config_uri", uri)
+                }
+                startActivity(intent)
                 overridePendingTransition(0, 0)
                 true
             }
