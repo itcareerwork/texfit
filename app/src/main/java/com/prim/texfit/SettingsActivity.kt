@@ -317,6 +317,19 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun getConfigFileUri(forWrite: Boolean = false): Uri? {
         if (cachedConfigUri != null) return cachedConfigUri
+        
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedUriStr = prefs.getString(CONFIG_FILE_URI_KEY, null)
+        if (cachedUriStr != null) {
+            val uri = Uri.parse(cachedUriStr)
+            if (getFileLastModified(uri) != -1L) {
+                cachedConfigUri = uri
+                return uri
+            } else {
+                prefs.edit { remove(CONFIG_FILE_URI_KEY) }
+            }
+        }
+        
         val folder = getFolderDocumentFile() ?: return null
         val file = if (forWrite) findOrCreateConfigFile(folder) else findConfigFileForRead(folder)
         return file?.uri
@@ -462,7 +475,10 @@ class SettingsActivity : AppCompatActivity() {
     private fun getFileLastModified(uri: Uri): Long {
         return try {
             contentResolver.query(uri, arrayOf(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getLong(0) else -1L
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                    if (index != -1) cursor.getLong(index) else 0L
+                } else -1L
             } ?: -1L
         } catch (e: Exception) { -1L }
     }
@@ -473,12 +489,10 @@ class SettingsActivity : AppCompatActivity() {
                 lastLoadResultCache?.let { applyLoadResult(it, hideOverlay = false) }
             }
 
-            val configUri = withContext(Dispatchers.IO) { getConfigFileUri() }
+            val configUri = cachedConfigUri ?: withContext(Dispatchers.IO) { getConfigFileUri() }
 
             if (configUri == null) {
-                if (showOverlay) {
-                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
-                }
+                if (showOverlay) Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
@@ -529,9 +543,7 @@ class SettingsActivity : AppCompatActivity() {
                 applyLoadResult(result, hideOverlay = true)
             } else {
                 loadingOverlay.visibility = View.GONE
-                if (showOverlay) {
-                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
-                }
+                if (showOverlay) Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -561,13 +573,12 @@ class SettingsActivity : AppCompatActivity() {
         if (cachedUriStr != null) {
             try {
                 val uri = Uri.parse(cachedUriStr)
-                contentResolver.openInputStream(uri)?.use { 
+                if (getFileLastModified(uri) != -1L) {
                     val file = DocumentFile.fromSingleUri(this, uri)
                     if (cachedConfigUri == null) cachedConfigUri = uri
                     return file 
                 }
             } catch (e: Exception) { 
-                Log.d(TAG, "Cached URI unreachable")
                 prefs.edit { remove(CONFIG_FILE_URI_KEY) }
                 cachedConfigUri = null
             }
