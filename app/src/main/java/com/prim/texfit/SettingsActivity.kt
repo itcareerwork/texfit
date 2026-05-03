@@ -41,6 +41,8 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -70,6 +72,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
         private var lastLoadResultCache: LoadResult? = null
+        private val fileLock = Mutex()
 
         private fun generateId(): String = (100000..999999).random().toString()
         private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
@@ -106,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
             val videoItemsArray = json.optJSONArray("video_items") ?: JSONArray()
             val allItems = mutableListOf<VideoItem>()
             for (i in 0 until videoItemsArray.length()) {
-                allItems.add(VideoItem.fromJson(videoItemsArray.getJSONObject(i), context, loadTimings = true))
+                allItems.add(VideoItem.fromJson(videoItemsArray.getJSONObject(i), context))
             }
 
             val sourceTable = allItems.filter { it.isActive }.sortedWith(compareBy(
@@ -336,31 +339,41 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
-        val configUri = getConfigFileUri(forWrite = true) ?: return
-        val json = readConfigJson(configUri) ?: return
-        val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
-        val items = mutableListOf<VideoItem>()
-        for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), this, loadTimings = true))
-        val index = items.indexOfFirst { it.id == id }
-        if (index != -1) {
-            items[index] = transformer(items[index])
-            saveToConfig(configUri, items)
-            loadUIFromConfig()
+        lifecycleScope.launch(Dispatchers.IO) {
+            fileLock.withLock {
+                val configUri = getConfigFileUri(forWrite = true) ?: return@withLock
+                val json = readConfigJson(configUri) ?: return@withLock
+                val itemsArray = json.optJSONArray("video_items") ?: JSONArray()
+                val items = mutableListOf<VideoItem>()
+                for (i in 0 until itemsArray.length()) items.add(VideoItem.fromJson(itemsArray.getJSONObject(i), this@SettingsActivity))
+                val index = items.indexOfFirst { it.id == id }
+                if (index != -1) {
+                    items[index] = transformer(items[index])
+                    saveToConfig(configUri, items)
+                    withContext(Dispatchers.Main) { loadUIFromConfig() }
+                }
+            }
         }
     }
 
     private fun performLaunchStep() {
-        val configUri = getConfigFileUri() ?: return
-        val json = readConfigJson(configUri) ?: return
-        val updated = applyLaunchLogic(json, this)
-        contentResolver.openOutputStream(configUri, "wt")?.use { writer ->
-            OutputStreamWriter(writer).use { it.write(updated.toString(4)) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            fileLock.withLock {
+                val configUri = getConfigFileUri() ?: return@withLock
+                val json = readConfigJson(configUri) ?: return@withLock
+                val updated = applyLaunchLogic(json, this@SettingsActivity)
+                contentResolver.openOutputStream(configUri, "wt")?.use { writer ->
+                    OutputStreamWriter(writer).use { it.write(updated.toString(4)) }
+                }
+                withContext(Dispatchers.Main) {
+                    loadUIFromConfig(showOverlay = true)
+                    val playlistStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_PLAYLIST, null)
+                    val count = if (playlistStr != null) JSONArray(playlistStr).length() else 0
+                    if (count == 0) Toast.makeText(this@SettingsActivity, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
+                    else Toast.makeText(this@SettingsActivity, getString(R.string.files_found_count, count), Toast.LENGTH_SHORT).show()
+                }
+            }
         }
-        loadUIFromConfig(showOverlay = true)
-        val playlistStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_PLAYLIST, null)
-        val count = if (playlistStr != null) JSONArray(playlistStr).length() else 0
-        if (count == 0) Toast.makeText(this, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
-        else Toast.makeText(this, getString(R.string.files_found_count, count), Toast.LENGTH_SHORT).show()
     }
 
     private fun formatFileSize(size: Long): String {
@@ -420,42 +433,60 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun performBackup() {
-        val configUri = getConfigFileUri() ?: return
-        try {
-            val content = contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } ?: return
-            val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
-            val backupName = "${CONFIG_FILE_NAME}_${dateStr}.backup"
-            val folder = getFolderDocumentFile() ?: return
-            folder.findFile(backupName)?.delete()
-            val backupFile = folder.createFile("application/octet-stream", backupName) ?: return
-            contentResolver.openOutputStream(backupFile.uri)?.use { it.write(content.toByteArray()) }
-            Toast.makeText(this, getString(R.string.backup_created, backupName), Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) { Log.e(TAG, "Backup error", e) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            fileLock.withLock {
+                val configUri = getConfigFileUri() ?: return@withLock
+                try {
+                    val content = contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } ?: return@withLock
+                    val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
+                    val backupName = "${CONFIG_FILE_NAME}_${dateStr}.backup"
+                    val folder = getFolderDocumentFile() ?: return@withLock
+                    folder.findFile(backupName)?.delete()
+                    val backupFile = folder.createFile("application/octet-stream", backupName) ?: return@withLock
+                    contentResolver.openOutputStream(backupFile.uri)?.use { it.write(content.toByteArray()) }
+                    withContext(Dispatchers.Main) { Toast.makeText(this@SettingsActivity, getString(R.string.backup_created, backupName), Toast.LENGTH_SHORT).show() }
+                } catch (e: Exception) { Log.e(TAG, "Backup error", e) }
+            }
+        }
     }
 
     private fun restoreBackup(backupFile: DocumentFile) {
-        val configUri = getConfigFileUri(forWrite = true) ?: return
-        try {
-            val content = contentResolver.openInputStream(backupFile.uri)?.use { it.bufferedReader().readText() } ?: return
-            contentResolver.openOutputStream(configUri, "wt")?.use { it.write(content.toByteArray()) }
-            loadUIFromConfig(showOverlay = true); Toast.makeText(this, getString(R.string.backup_restored, backupFile.name), Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) { Log.e(TAG, "Restore error", e) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            fileLock.withLock {
+                val configUri = getConfigFileUri(forWrite = true) ?: return@withLock
+                try {
+                    val content = contentResolver.openInputStream(backupFile.uri)?.use { it.bufferedReader().readText() } ?: return@withLock
+                    contentResolver.openOutputStream(configUri, "wt")?.use { it.write(content.toByteArray()) }
+                    withContext(Dispatchers.Main) {
+                        loadUIFromConfig(showOverlay = true)
+                        Toast.makeText(this@SettingsActivity, getString(R.string.backup_restored, backupFile.name), Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) { Log.e(TAG, "Restore error", e) }
+            }
+        }
     }
 
     private fun addSingleFile(uri: Uri) {
-        val configUri = getConfigFileUri(forWrite = true) ?: return
-        try {
-            val pickedFile = DocumentFile.fromSingleUri(this, uri) ?: return
-            val name = pickedFile.name ?: "video.mp4"
-            if (!name.endsWith(".mp4", ignoreCase = true)) { Toast.makeText(this, getString(R.string.file_not_mp4), Toast.LENGTH_SHORT).show(); return }
-            val json = readConfigJson(configUri) ?: JSONObject()
-            val array = json.optJSONArray("video_items") ?: JSONArray()
-            val items = mutableListOf<VideoItem>()
-            for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this, loadTimings = true))
-            items.add(VideoItem(id = generateId(), fileName = name, fileSizeRaw = pickedFile.length()))
-            saveToConfig(configUri, items)
-            loadUIFromConfig(showOverlay = true)
-        } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            fileLock.withLock {
+                val configUri = getConfigFileUri(forWrite = true) ?: return@withLock
+                try {
+                    val pickedFile = DocumentFile.fromSingleUri(this@SettingsActivity, uri) ?: return@withLock
+                    val name = pickedFile.name ?: "video.mp4"
+                    if (!name.endsWith(".mp4", ignoreCase = true)) {
+                        withContext(Dispatchers.Main) { Toast.makeText(this@SettingsActivity, getString(R.string.file_not_mp4), Toast.LENGTH_SHORT).show() }
+                        return@withLock
+                    }
+                    val json = readConfigJson(configUri) ?: JSONObject()
+                    val array = json.optJSONArray("video_items") ?: JSONArray()
+                    val items = mutableListOf<VideoItem>()
+                    for (i in 0 until array.length()) items.add(VideoItem.fromJson(array.getJSONObject(i), this@SettingsActivity))
+                    items.add(VideoItem(id = generateId(), fileName = name, fileSizeRaw = pickedFile.length()))
+                    saveToConfig(configUri, items)
+                    withContext(Dispatchers.Main) { loadUIFromConfig(showOverlay = true) }
+                } catch (e: Exception) { Log.e(TAG, getString(R.string.error_saving), e) }
+            }
+        }
     }
 
     private fun showTimePicker() {
@@ -502,40 +533,42 @@ class SettingsActivity : AppCompatActivity() {
             if (showOverlay) loadingOverlay.visibility = View.VISIBLE
             
             val result = withContext(Dispatchers.IO) {
-                try {
-                    val jsonStr = try { contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } } catch (e: Exception) { null }
-                    if (jsonStr == null) {
-                        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { remove(CONFIG_FILE_URI_KEY) }
-                        cachedConfigUri = null
-                        return@withContext null
-                    }
+                fileLock.withLock {
+                    try {
+                        val jsonStr = try { contentResolver.openInputStream(configUri)?.use { it.bufferedReader().readText() } } catch (e: Exception) { null }
+                        if (jsonStr == null) {
+                            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { remove(CONFIG_FILE_URI_KEY) }
+                            cachedConfigUri = null
+                            return@withLock null
+                        }
 
-                    val finalJson = JSONObject(jsonStr)
-                    val finalTs = currentTs
-                    
-                    val sOpts = mutableListOf<ConfigOption>()
-                    finalJson.optJSONArray("session_options")?.let { arr ->
-                        for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); sOpts.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
-                    }
-                    sOpts.sortWith(compareBy { extractNumber(it.name) })
+                        val finalJson = JSONObject(jsonStr)
+                        val finalTs = currentTs
+                        
+                        val sOpts = mutableListOf<ConfigOption>()
+                        finalJson.optJSONArray("session_options")?.let { arr ->
+                            for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); sOpts.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
+                        }
+                        sOpts.sortWith(compareBy { extractNumber(it.name) })
 
-                    val eOpts = mutableListOf<ConfigOption>()
-                    finalJson.optJSONArray("exercise_options")?.let { arr ->
-                        for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); eOpts.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
-                    }
-                    eOpts.sortWith(compareBy { extractNumber(it.name) })
+                        val eOpts = mutableListOf<ConfigOption>()
+                        finalJson.optJSONArray("exercise_options")?.let { arr ->
+                            for (i in 0 until arr.length()) { val obj = arr.getJSONObject(i); eOpts.add(ConfigOption(obj.getString("id"), obj.getString("name"))) }
+                        }
+                        eOpts.sortWith(compareBy { extractNumber(it.name) })
 
-                    val array = finalJson.optJSONArray("video_items") ?: JSONArray()
-                    val itemsList = mutableListOf<VideoItem>()
-                    for (i in 0 until array.length()) itemsList.add(VideoItem.fromJson(array.getJSONObject(i), this@SettingsActivity, loadTimings = true))
-                    
-                    val eMap = eOpts.associate { it.id to it.name }
-                    val topText = calculateTopInputText(itemsList, eMap)
-                    val btnVis = if (finalJson.optInt("button", 0) == 1) View.VISIBLE else View.GONE
-                    val tTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
-                    
-                    LoadResult(itemsList, sOpts, eOpts, btnVis, tTime, finalTs, topText)
-                } catch (e: Exception) { Log.e(TAG, "Load error", e); null }
+                        val array = finalJson.optJSONArray("video_items") ?: JSONArray()
+                        val itemsList = mutableListOf<VideoItem>()
+                        for (i in 0 until array.length()) itemsList.add(VideoItem.fromJson(array.getJSONObject(i), this@SettingsActivity))
+                        
+                        val eMap = eOpts.associate { it.id to it.name }
+                        val topText = calculateTopInputText(itemsList, eMap)
+                        val btnVis = if (finalJson.optInt("button", 0) == 1) View.VISIBLE else View.GONE
+                        val tTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
+                        
+                        LoadResult(itemsList, sOpts, eOpts, btnVis, tTime, finalTs, topText)
+                    } catch (e: Exception) { Log.e(TAG, "Load error", e); null }
+                }
             }
 
             if (result != null) {
@@ -596,34 +629,36 @@ class SettingsActivity : AppCompatActivity() {
     private fun performFullRefresh() {
         loadingOverlay.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
-            val success = try {
-                val configUri = getConfigFileUri(forWrite = true) ?: return@launch
-                val folder = getFolderDocumentFile() ?: return@launch
-                val json = readConfigJson(configUri) ?: JSONObject()
-                val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
-                val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
-                val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
-                val currentItems = mutableListOf<VideoItem>()
-                for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this@SettingsActivity, loadTimings = true))
-                val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
-                val existingNames = updatedItems.map { it.fileName }.toSet()
-                filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
-                    updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
+            fileLock.withLock {
+                val success = try {
+                    val configUri = getConfigFileUri(forWrite = true) ?: return@withLock
+                    val folder = getFolderDocumentFile() ?: return@withLock
+                    val json = readConfigJson(configUri) ?: JSONObject()
+                    val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
+                    val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
+                    val currentItemsArray = json.optJSONArray("video_items") ?: JSONArray()
+                    val currentItems = mutableListOf<VideoItem>()
+                    for (i in 0 until currentItemsArray.length()) currentItems.add(VideoItem.fromJson(currentItemsArray.getJSONObject(i), this@SettingsActivity))
+                    val updatedItems = currentItems.filter { it.fileName in fileNamesInFolder }.toMutableList()
+                    val existingNames = updatedItems.map { it.fileName }.toSet()
+                    filesInFolder.filter { (it.name ?: "") !in existingNames }.forEach { file ->
+                        updatedItems.add(VideoItem(id = generateId(), fileName = file.name ?: "", fileSizeRaw = file.length()))
+                    }
+                    saveToConfig(configUri, updatedItems)
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Refresh error", e)
+                    false
                 }
-                saveToConfig(configUri, updatedItems)
-                true
-            } catch (e: Exception) {
-                Log.e(TAG, "Refresh error", e)
-                false
-            }
 
-            withContext(Dispatchers.Main) {
-                if (success) {
-                    loadUIFromConfig(showOverlay = true)
-                    Toast.makeText(this@SettingsActivity, getString(R.string.updated), Toast.LENGTH_SHORT).show()
-                } else {
-                    loadingOverlay.visibility = View.GONE
-                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        loadUIFromConfig(showOverlay = true)
+                        Toast.makeText(this@SettingsActivity, getString(R.string.updated), Toast.LENGTH_SHORT).show()
+                    } else {
+                        loadingOverlay.visibility = View.GONE
+                        Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -632,28 +667,30 @@ class SettingsActivity : AppCompatActivity() {
     private fun performSort() {
         loadingOverlay.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
-            val success = try {
-                val configUri = getConfigFileUri(forWrite = true) ?: return@launch
-                val currentItems = adapter.currentList.toMutableList()
-                val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isActive }
-                    .thenBy { item -> extractNumber(sessionMap[item.sessionId] ?: "") }
-                    .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
-                    .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
-                    .thenBy { it.fileName })
-                saveToConfig(configUri, sortedItems)
-                true
-            } catch (e: Exception) {
-                Log.e(TAG, "Sort error", e)
-                false
-            }
+            fileLock.withLock {
+                val success = try {
+                    val configUri = getConfigFileUri(forWrite = true) ?: return@withLock
+                    val currentItems = withContext(Dispatchers.Main) { adapter.currentList.toMutableList() }
+                    val sortedItems = currentItems.sortedWith(compareByDescending<VideoItem> { it.isActive }
+                        .thenBy { item -> extractNumber(sessionMap[item.sessionId] ?: "") }
+                        .thenBy { it.numExercise.toIntOrNull() ?: Int.MAX_VALUE }
+                        .thenBy { it.numFile.toIntOrNull() ?: Int.MAX_VALUE }
+                        .thenBy { it.fileName })
+                    saveToConfig(configUri, sortedItems)
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Sort error", e)
+                    false
+                }
 
-            withContext(Dispatchers.Main) {
-                loadingOverlay.visibility = View.GONE
-                if (success) {
-                    loadUIFromConfig(showOverlay = false)
-                    Toast.makeText(this@SettingsActivity, getString(R.string.sorted_msg), Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                withContext(Dispatchers.Main) {
+                    loadingOverlay.visibility = View.GONE
+                    if (success) {
+                        loadUIFromConfig(showOverlay = false)
+                        Toast.makeText(this@SettingsActivity, getString(R.string.sorted_msg), Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -681,7 +718,17 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun findOrCreateConfigFile(folder: DocumentFile): DocumentFile? = findConfigFileForRead(folder) ?: folder.createFile("application/json", CONFIG_FILE_NAME)
-    private fun updateConfig(transformer: (JSONObject) -> Unit) { val uri = getConfigFileUri(forWrite = true) ?: return; val json = readConfigJson(uri) ?: JSONObject(); transformer(json); contentResolver.openOutputStream(uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }; loadUIFromConfig(showOverlay = true) }
+    private fun updateConfig(transformer: (JSONObject) -> Unit) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            fileLock.withLock {
+                val uri = getConfigFileUri(forWrite = true) ?: return@withLock
+                val json = readConfigJson(uri) ?: JSONObject()
+                transformer(json)
+                contentResolver.openOutputStream(uri, "wt")?.use { writer -> OutputStreamWriter(writer).use { it.write(json.toString(4)) } }
+                withContext(Dispatchers.Main) { loadUIFromConfig(showOverlay = true) }
+            }
+        }
+    }
 
     private fun readConfigJson(uri: Uri): JSONObject? = try { contentResolver.openInputStream(uri)?.use { inputStream -> JSONObject(inputStream.bufferedReader().readText()) } } catch (e: Exception) { Log.e(TAG, getString(R.string.error_reading), e); null }
 
@@ -691,17 +738,15 @@ class SettingsActivity : AppCompatActivity() {
         fun isComplete() = sessionId.isNotEmpty() && exerciseId.isNotEmpty() && numExercise.isNotEmpty() && numFile.isNotEmpty()
         fun toJson() = JSONObject().apply { put("id", id); put("s_id", sessionId); put("e_id", exerciseId); put("n_e", numExercise); put("n_f", numFile); put("f_n", fileName); put("f_sz", fileSizeRaw); put("note", note); put("c_n", customName); put("is_a", isActive); put("is_sh", isSizeHighlighted); val tArr = JSONArray(); timings.forEach { tArr.put(JSONObject().apply { put("t", it.time); put("m", it.max); put("s", it.step); put("mt", it.multType); put("mv", it.multVal); put("en", it.isEnabled) }) }; put("timings", tArr) }
         companion object {
-            fun fromJson(j: JSONObject, context: Context, loadTimings: Boolean = true): VideoItem {
+            fun fromJson(j: JSONObject, context: Context): VideoItem {
                 val vi = VideoItem(id = j.optString("id", generateId()), sessionId = j.optString("s_id"), exerciseId = j.optString("e_id"), numExercise = j.optString("n_e"), numFile = j.optString("n_f"), fileName = j.optString("f_n"), fileSizeRaw = j.optLong("f_sz"), note = j.optString("note"), customName = j.optString("c_n"), isActive = j.optBoolean("is_a", false), isSizeHighlighted = j.optBoolean("is_sh", false))
-                if (loadTimings) {
-                    val tArr = j.optJSONArray("timings")
-                    if (tArr != null) {
-                        val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        for (i in 0 until tArr.length()) { 
-                            val tObj = tArr.getJSONObject(i); val time = tObj.getInt("t")
-                            val currVal = sharedPrefs.getLong("curr_${vi.id}_$time", -1L)
-                            vi.timings.add(Timing(time, tObj.optLong("m", 0L), currVal, tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) 
-                        }
+                val tArr = j.optJSONArray("timings")
+                if (tArr != null) {
+                    val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    for (i in 0 until tArr.length()) { 
+                        val tObj = tArr.getJSONObject(i); val time = tObj.getInt("t")
+                        val currVal = sharedPrefs.getLong("curr_${vi.id}_$time", -1L)
+                        vi.timings.add(Timing(time, tObj.optLong("m", 0L), currVal, tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) 
                     }
                 }
                 return vi
@@ -735,10 +780,10 @@ class SettingsActivity : AppCompatActivity() {
                     val selected = displayOptions[i] as ConfigOption; val builder = AlertDialog.Builder(this@SettingsActivity).setTitle(if (title == getString(R.string.header_exercise)) getString(R.string.exercise_title_format, selected.name) else getString(R.string.delete_option_title))
                     if (title == getString(R.string.header_exercise)) {
                         val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }; val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }; leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f }); val leftValue = TextView(this@SettingsActivity).apply { text = getCategoryState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; leftValue.setOnClickListener { v -> val optionsList = (0..999).map { String.format(Locale.US, "%03d", it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> leftValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; leftBox.addView(leftValue); val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }; rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f }); val rightValue = TextView(this@SettingsActivity).apply { text = getResetState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; rightValue.setOnClickListener { v -> val optionsList = listOf("000", "001"); val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> rightValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
-                        builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val configUri = getConfigFileUri(forWrite = true) ?: return@setNeutralButton; saveToConfig(configUri, currentList.map { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it }); loadUIFromConfig() }
-                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); val configUri = getConfigFileUri(forWrite = true) ?: return@setPositiveButton; saveToConfig(configUri, currentList); loadUIFromConfig() }
-                    } else { builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val configUri = getConfigFileUri(forWrite = true) ?: return@setNeutralButton; saveToConfig(configUri, currentList.map { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it }); loadUIFromConfig() } }
-                    builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); val configUri = getConfigFileUri(forWrite = true) ?: return@setNeutralButton; saveToConfig(configUri, currentList.map { if (title == getString(R.string.header_session)) { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it } else { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it } }); loadUIFromConfig() }
+                        builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); updateItemById(selected.id) { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it } }
+                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); updateItemById(selected.id) { it } }
+                    } else { builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); updateItemById(selected.id) { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it } } }
+                    builder.setNeutralButton(getString(R.string.delete)) { _, _ -> options.remove(selected); updateItemById(selected.id) { if (title == getString(R.string.header_session)) { if (it.sessionId == selected.id) it.copy(sessionId = "", numExercise = "", isActive = false) else it } else { if (it.exerciseId == selected.id) it.copy(exerciseId = "", numFile = "", isActive = false) else it } } }
                     builder.setNegativeButton(getString(R.string.dialog_cancel), null); val dlg = builder.create(); dlg.setOnShowListener { tintDialogButtons(dlg, true) }; dlg.show(); true
                 }
                 dialogView.addView(listView); dialogView.addView(ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_input_add); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER; topMargin = 16 }; setOnClickListener { onAdd(); alertDialog?.dismiss() } }); alertDialog = AlertDialog.Builder(this@SettingsActivity).setTitle(title).setView(dialogView).create(); alertDialog?.show(); val lp = WindowManager.LayoutParams(); lp.copyFrom(alertDialog?.window?.attributes); lp.width = Math.min((300 * resources.displayMetrics.density).toInt(), (resources.displayMetrics.widthPixels * 0.9).toInt()); alertDialog?.window?.attributes = lp
