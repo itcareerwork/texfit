@@ -38,6 +38,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import com.google.android.material.progressindicator.CircularProgressIndicator
+import com.prim.texfit.db.AppDatabase
+import com.prim.texfit.SettingsActivity.Companion.toDomain
+import com.prim.texfit.SettingsActivity.Companion.toEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
@@ -128,6 +135,9 @@ class VideoPlayerActivity : Activity() {
     private var isCompletionSoundPlayed = false
     private var initialSegmentPlayed: Long = 0L
     private var isInitialSegmentRestored: Boolean = false
+    
+    private lateinit var db: AppDatabase
+    private val activityScope = CoroutineScope(Dispatchers.Main)
 
     companion object {
         private const val PREFS_NAME = "TexfitPrefs"
@@ -186,6 +196,8 @@ class VideoPlayerActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUI()
         setContentView(R.layout.activity_video_player)
+        
+        db = AppDatabase.getDatabase(this)
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         isVideoMuted = prefs.getBoolean(KEY_VIDEO_MUTE, false)
@@ -252,48 +264,50 @@ class VideoPlayerActivity : Activity() {
         isInitialSegmentRestored = false
 
         if (videoUri != null) {
-            loadTimingsFromConfig()
-            setupStopwatch()
-            setupExerciseControls()
-            setupFineTuningControls()
+            activityScope.launch {
+                loadTimingsFromDB()
+                setupStopwatch()
+                setupExerciseControls()
+                setupFineTuningControls()
 
-            player = ExoPlayer.Builder(this).build()
-            playerView.player = player
-            player.setSeekParameters(SeekParameters.EXACT)
-            player.setMediaItem(MediaItem.fromUri(videoUri))
-            player.addListener(object : Player.Listener {
-                private var preparedOnce = false
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    updatePlayNoTimerUI()
-                    when (playbackState) {
-                        Player.STATE_READY -> {
-                            val d = player.duration
-                            if (!preparedOnce && d != C.TIME_UNSET) {
-                                preparedOnce = true
-                                seekBar.max = d.toInt()
-                                addDefaultTimings(d.toInt())
-                                drawTicks(d.toInt())
-                                player.seekTo(lastPos.toLong())
-                                player.pause()
-                                showControls(true)
-                                resetTaskTimer()
-                                applyAudioState()
-                                updateUIState()
-                                handler.post(updateSeekRunnable)
+                player = ExoPlayer.Builder(this@VideoPlayerActivity).build()
+                playerView.player = player
+                player.setSeekParameters(SeekParameters.EXACT)
+                player.setMediaItem(MediaItem.fromUri(videoUri))
+                player.addListener(object : Player.Listener {
+                    private var preparedOnce = false
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        updatePlayNoTimerUI()
+                        when (playbackState) {
+                            Player.STATE_READY -> {
+                                val d = player.duration
+                                if (!preparedOnce && d != C.TIME_UNSET) {
+                                    preparedOnce = true
+                                    seekBar.max = d.toInt()
+                                    addDefaultTimings(d.toInt())
+                                    drawTicks(d.toInt())
+                                    player.seekTo(lastPos.toLong())
+                                    player.pause()
+                                    showControls(true)
+                                    resetTaskTimer()
+                                    applyAudioState()
+                                    updateUIState()
+                                    handler.post(updateSeekRunnable)
+                                }
                             }
+                            Player.STATE_ENDED -> handlePlayerEnded()
                         }
-                        Player.STATE_ENDED -> handlePlayerEnded()
                     }
-                }
-                override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-                    if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
-                        if (pendingSeekClear) { pendingSeekClear = false; isSeeking = false }
-                        lastVideoPos = player.currentPosition.toInt()
-                        lastTickRealtime = SystemClock.elapsedRealtime()
+                    override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                        if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                            if (pendingSeekClear) { pendingSeekClear = false; isSeeking = false }
+                            lastVideoPos = player.currentPosition.toInt()
+                            lastTickRealtime = SystemClock.elapsedRealtime()
+                        }
                     }
-                }
-            })
-            player.prepare()
+                })
+                player.prepare()
+            }
         }
 
         clickInterceptor.setOnClickListener { 
@@ -386,7 +400,7 @@ class VideoPlayerActivity : Activity() {
             if (currStepConfig == 1) {
                 target.curr = if (target.step > 0) -target.step else if (target.max > 0) target.max else 0L
             } else target.curr = -1L
-            saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.saved_msg), Toast.LENGTH_SHORT).show()
+            saveTimingsToDB() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.saved_msg), Toast.LENGTH_SHORT).show()
         }
         btnControlDelete.setOnClickListener {
             val pos = player.currentPosition.toInt(); val sorted = timings.sortedBy { it.time }; val exactTiming = sorted.find { Math.abs(it.time - pos) < 500 }
@@ -398,11 +412,10 @@ class VideoPlayerActivity : Activity() {
                     exactTiming.multType = 0
                     exactTiming.multVal = 1
                     if (currStepConfig == 1) exactTiming.curr = 0L else exactTiming.curr = -1L
-                    SettingsActivity.saveTimingCurr(this, videoItemId, exactTiming.time, exactTiming.curr)
                 } else {
                     timings.remove(exactTiming)
                 }
-                saveTimingsToConfig(); drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI()
+                saveTimingsToDB(); drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI()
             }
         }
         btnControlGeneralSettings.setOnClickListener { showGeneralSettingsPopup(it) }
@@ -437,8 +450,8 @@ class VideoPlayerActivity : Activity() {
     private fun showGeneralSettingsPopup(anchor: View) {
         val dialogView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16); setBackgroundColor(Color.parseColor("#E0000000")) }
         fun createPopupBtn(label: String, color: Int, onClick: () -> Unit): Button = Button(this).apply { text = label; textSize = 14f; setTextColor(Color.WHITE); background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg); backgroundTintList = ColorStateList.valueOf(color); setOnClickListener { onClick(); popup?.dismiss() }; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (42 * resources.displayMetrics.density).toInt()).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() } }
-        dialogView.addView(createPopupBtn(getString(R.string.reset_all), Color.parseColor("#F57C00")) { timings.forEach { t -> if (currStepConfig == 1) t.curr = if (t.step > 0) -t.step else 0L else t.curr = -1L; SettingsActivity.saveTimingCurr(this, videoItemId, t.time, t.curr) }; saveTimingsToConfig() ; resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_reset), Toast.LENGTH_SHORT).show() })
-        dialogView.addView(createPopupBtn(getString(R.string.delete_all), Color.parseColor("#1565C0")) { timings.clear(); addDefaultTimings(player.duration.toInt()); saveTimingsToConfig() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_deleted), Toast.LENGTH_SHORT).show() })
+        dialogView.addView(createPopupBtn(getString(R.string.reset_all), Color.parseColor("#F57C00")) { timings.forEach { t -> if (currStepConfig == 1) t.curr = if (t.step > 0) -t.step else 0L else t.curr = -1L }; saveTimingsToDB() ; resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_reset), Toast.LENGTH_SHORT).show() })
+        dialogView.addView(createPopupBtn(getString(R.string.delete_all), Color.parseColor("#1565C0")) { timings.clear(); addDefaultTimings(player.duration.toInt()); saveTimingsToDB() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_deleted), Toast.LENGTH_SHORT).show() })
         popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true); popup?.showAsDropDown(anchor)
     }
 
@@ -537,7 +550,7 @@ class VideoPlayerActivity : Activity() {
 
     private fun addDefaultTimings(duration: Int) {
         var changed = false; if (timings.none { it.time == 0 }) { timings.add(SettingsActivity.Timing(0, 0, 0, 0, 1, 1, false)); changed = true }; val initialSize = timings.size; timings.removeAll { it.time >= duration - 1000 && it.time > 0 }; if (timings.size != initialSize) changed = true
-        if (changed) { timings.sortBy { it.time }; saveTimingsToConfig() }
+        if (changed) { timings.sortBy { it.time }; saveTimingsToDB() }
     }
 
     private fun drawTicks(duration: Int) {
@@ -609,8 +622,6 @@ class VideoPlayerActivity : Activity() {
         }
     }
 
-    private fun findConfigFile(folder: DocumentFile): DocumentFile? { folder.findFile("texfit.cfg")?.let { return it }; return folder.listFiles().firstOrNull { val name = it.name ?: return@firstOrNull false; name == "texfit.cfg" || name.startsWith("texfit.cfg.") } }
-
     private fun saveCurrentPositionToPrefs(pos: Int) {
         if (videoItemId.isEmpty() || isFromSettings) return
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -627,42 +638,38 @@ class VideoPlayerActivity : Activity() {
                 }
             }
             prefs.edit().putString(KEY_PLAYLIST, titlesArray.toString()).apply()
+            
+            // Sync timings 'curr' field back to DB as well
+            activityScope.launch {
+                saveTimingsToDB()
+            }
         } catch (e: Exception) { Log.e("VideoPlayer", "Save pos to prefs error", e) }
     }
 
-    private fun loadTimingsFromConfig() {
+    private suspend fun loadTimingsFromDB() {
         try {
-            val folderUriStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
-            val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return; val configFile = findConfigFile(folder) ?: return
-            contentResolver.openInputStream(configFile.uri)?.use { inputStream ->
-                val json = JSONObject(inputStream.bufferedReader().readText()); currStepConfig = json.optInt("curr_step", 1); val videoItems = json.optJSONArray("video_items") ?: return
-                for (i in 0 until videoItems.length()) { val item = videoItems.getJSONObject(i); if (item.optString("id") == videoItemId) { videoFileName = item.optString("f_n"); fileNumForDisplay = item.optString("n_f", "000"); val tArr = item.optJSONArray("timings"); timings.clear(); if (tArr != null) for (j in 0 until tArr.length()) { val tObj = tArr.getJSONObject(j); val time = tObj.getInt("t"); val currFromPrefs = SettingsActivity.getTimingCurr(this, videoItemId, time); timings.add(SettingsActivity.Timing(time, tObj.optLong("m", 0), currFromPrefs, tObj.optLong("s", 0), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", true))) }; break } }
-            }
-        } catch (e: Exception) { Log.e("VideoPlayer", "Load timings error", e) }
+            val itemEntity = db.videoItemDao().getById(videoItemId) ?: return
+            val domainItem = itemEntity.toDomain(this)
+            videoFileName = domainItem.fileName
+            fileNumForDisplay = domainItem.numFile.ifEmpty { "000" }
+            timings.clear()
+            timings.addAll(domainItem.timings)
+            
+            val stepStr = db.globalSettingDao().get("curr_step") ?: "1"
+            currStepConfig = stepStr.toIntOrNull() ?: 1
+        } catch (e: Exception) { Log.e("VideoPlayer", "Load timings from DB error", e) }
     }
 
-    private fun saveTimingsToConfig() {
-        try {
-            val folderUriStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("selectedFolderUri", null) ?: return
-            val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return; val configFile = findConfigFile(folder) ?: return
-            val oldJson: JSONObject; contentResolver.openInputStream(configFile.uri)?.use { inputStream -> oldJson = JSONObject(inputStream.bufferedReader().readText()) } ?: return
-            val videoItems = oldJson.optJSONArray("video_items") ?: return
-            for (i in 0 until videoItems.length()) { val item = videoItems.optJSONObject(i) ?: continue; if (item.optString("id") == videoItemId) { val tArr = JSONArray(); timings.forEach { val tObj = JSONObject(); tObj.put("t", it.time); tObj.put("m", it.max); /* БЕЗ ПОЛЯ "c" */ tObj.put("s", it.step); tObj.put("mt", it.multType); tObj.put("mv", it.multVal); tObj.put("en", it.isEnabled); tArr.put(tObj); SettingsActivity.saveTimingCurr(this, videoItemId, it.time, it.curr) }; item.put("timings", tArr); break } }
-            
-            // Формируем финальный JSON с правильным порядком
-            val finalJson = JSONObject()
-            finalJson.put("button", oldJson.optInt("button", 0))
-            finalJson.put("curr_step", oldJson.optInt("curr_step", 1))
-            
-            // Копируем остальные ключи
-            oldJson.keys().forEach { key ->
-                if (key != "button" && key != "curr_step") {
-                    finalJson.put(key, oldJson.get(key))
-                }
-            }
-            
-            contentResolver.openOutputStream(configFile.uri, "wt")?.use { OutputStreamWriter(it).use { writer -> writer.write(finalJson.toString(4)) } }
-        } catch (e: Exception) { Log.e("VideoPlayer", "Save timings error", e) }
+    private fun saveTimingsToDB() {
+        activityScope.launch(Dispatchers.IO) {
+            try {
+                val itemEntity = db.videoItemDao().getById(videoItemId) ?: return@launch
+                val domainItem = itemEntity.toDomain(this@VideoPlayerActivity)
+                domainItem.timings.clear()
+                domainItem.timings.addAll(timings)
+                db.videoItemDao().update(domainItem.toEntity())
+            } catch (e: Exception) { Log.e("VideoPlayer", "Save timings to DB error", e) }
+        }
     }
 
     private fun showControls(show: Boolean) { 

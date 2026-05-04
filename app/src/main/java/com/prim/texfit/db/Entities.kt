@@ -19,7 +19,8 @@ data class VideoItemEntity(
     val timings: String, // JSON serialized timings
     val customName: String,
     val isActive: Boolean,
-    val isSizeHighlighted: Boolean
+    val isSizeHighlighted: Boolean,
+    val sortOrder: Int = 0 // Поле для стабильной сортировки
 )
 
 @Entity(tableName = "config_options")

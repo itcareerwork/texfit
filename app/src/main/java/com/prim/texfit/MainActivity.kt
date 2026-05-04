@@ -24,6 +24,8 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.prim.texfit.db.AppDatabase
+import com.prim.texfit.SettingsActivity.Companion.toDomain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -38,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private val adapter = PlaylistAdapter()
     private var isFirstResume = true
+    private lateinit var db: AppDatabase
 
     companion object {
         private const val PREFS_NAME = "TexfitPrefs"
@@ -59,6 +62,8 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        
+        db = AppDatabase.getDatabase(this)
 
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -81,7 +86,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkAndPerformAutoLaunch() {
+    private suspend fun checkAndPerformAutoLaunch() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val timeStr = prefs.getString(KEY_TRAINING_TIME, "00:00") ?: "00:00"
         val lastLaunchTs = prefs.getLong(KEY_LAST_LAUNCH, 0L)
@@ -108,17 +113,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun performDailyUpdate() {
-        val configUri = getConfigFileUri() ?: return
-
+    private suspend fun performDailyUpdate() {
         try {
-            val json: JSONObject
-            contentResolver.openInputStream(configUri)?.use { inputStream ->
-                json = JSONObject(inputStream.bufferedReader().readText())
-            } ?: return
-
-            SettingsActivity.applyLaunchLogic(json, this)
-            
+            SettingsActivity.applyLaunchLogicDB(this, db)
         } catch (e: Exception) { Log.e(TAG, "Daily update failed", e) }
     }
 
@@ -158,41 +155,31 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val playlist = withContext(Dispatchers.IO) {
                 try {
-                    val configUri = getConfigFileUri() ?: return@withContext null
                     val titlesArray = JSONArray(playlistJsonStr)
-                    
-                    contentResolver.openInputStream(configUri)?.use { inputStream ->
-                        val json = JSONObject(inputStream.bufferedReader().readText())
-                        val videoItemsArray = json.optJSONArray("video_items") ?: return@withContext null
+                    val videoItems = db.videoItemDao().getAll().associateBy { it.id }
 
-                        val videoItemsMap = mutableMapOf<String, JSONObject>()
-                        for (i in 0 until videoItemsArray.length()) {
-                            val item = videoItemsArray.getJSONObject(i)
-                            videoItemsMap[item.optString("id")] = item
-                        }
+                    val folderUri = Uri.parse(folderUriStr)
+                    val folder = DocumentFile.fromTreeUri(this@MainActivity, folderUri) ?: return@withContext null
+                    val resultList = mutableListOf<PlaylistItem>()
+                    for (i in 0 until titlesArray.length()) {
+                        val entry = titlesArray.optJSONArray(i) ?: continue
+                        val id = entry.optString(0)
+                        val status = entry.optInt(1, 0)
+                        val lastPos = entry.optInt(2, 0) 
+                        val segmentPlayed = entry.optLong(3, 0L)
+                        
+                        val itemEntity = videoItems[id] ?: continue
+                        val fileName = itemEntity.fileName
+                        var displayName = itemEntity.customName
+                        if (displayName.isEmpty()) displayName = fileName
 
-                        val folder = DocumentFile.fromTreeUri(this@MainActivity, Uri.parse(folderUriStr)) ?: return@withContext null
-                        val resultList = mutableListOf<PlaylistItem>()
-                        for (i in 0 until titlesArray.length()) {
-                            val entry = titlesArray.optJSONArray(i) ?: continue
-                            val id = entry.optString(0)
-                            val status = entry.optInt(1, 0)
-                            val lastPos = entry.optInt(2, 0) 
-                            val segmentPlayed = entry.optLong(3, 0L)
-                            
-                            val itemJson = videoItemsMap[id] ?: continue
-                            val fileName = itemJson.optString("f_n")
-                            var displayName = itemJson.optString("c_n")
-                            if (displayName.isEmpty()) displayName = fileName
-
-                            if (fileName.isNotEmpty()) {
-                                folder.findFile(fileName)?.uri?.let { uri ->
-                                    resultList.add(PlaylistItem(id, uri, status == 1, displayName, lastPos, segmentPlayed))
-                                }
+                        if (fileName.isNotEmpty()) {
+                            folder.findFile(fileName)?.uri?.let { uri ->
+                                resultList.add(PlaylistItem(id, uri, status == 1, displayName, lastPos, segmentPlayed))
                             }
                         }
-                        resultList
                     }
+                    resultList
                 } catch (e: Exception) {
                     Log.e(TAG, "Playlist loading failed", e)
                     null
@@ -327,9 +314,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+}
 
-    private class PlaylistDiffCallback : DiffUtil.ItemCallback<PlaylistItem>() {
-        override fun areItemsTheSame(oldItem: PlaylistItem, newItem: PlaylistItem) = oldItem.id == newItem.id
-        override fun areContentsTheSame(oldItem: PlaylistItem, newItem: PlaylistItem) = oldItem == newItem
-    }
+class PlaylistDiffCallback : DiffUtil.ItemCallback<MainActivity.PlaylistItem>() {
+    override fun areItemsTheSame(oldItem: MainActivity.PlaylistItem, newItem: MainActivity.PlaylistItem) = oldItem.id == newItem.id
+    override fun areContentsTheSame(oldItem: MainActivity.PlaylistItem, newItem: MainActivity.PlaylistItem) = oldItem == newItem
 }
