@@ -68,6 +68,9 @@ interface GlobalSettingDao {
     @Query("SELECT value FROM global_settings WHERE `key` = :key")
     suspend fun get(key: String): String?
 
+    @Query("SELECT value FROM global_settings WHERE `key` = :key")
+    fun getFlow(key: String): Flow<String?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun set(setting: GlobalSettingEntity)
 }

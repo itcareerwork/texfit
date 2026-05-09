@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -50,7 +51,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -71,7 +71,6 @@ class SettingsActivity : AppCompatActivity() {
         private const val TAG = "SettingsActivity"
         private const val CONFIG_FILE_NAME = "texfit.cfg"
         private const val EXTRA_INITIAL_URI = "android.provider.extra.INITIAL_URI"
-        private const val CONFIG_FILE_URI_KEY = "configFileUri"
         
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
@@ -80,9 +79,6 @@ class SettingsActivity : AppCompatActivity() {
         private fun generateId(): String = (100000..999999).random().toString()
         private fun extractNumber(s: String): Int = s.substringBefore(" ").toIntOrNull() ?: Int.MAX_VALUE
 
-        fun saveTimingCurr(context: Context, videoId: String, time: Int, curr: Long) {
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit { putLong("curr_${videoId}_$time", curr) }
-        }
         fun getCategoryState(context: Context, exId: String): String {
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString("cat_$exId", "000") ?: "000"
         }
@@ -97,103 +93,105 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         suspend fun applyLaunchLogicDB(context: Context, db: AppDatabase) {
-            val allItems = db.videoItemDao().getAll().map { it.toDomain(context) }
-            val sessionEntities = db.configOptionDao().getByType("session")
-            val sessionOptions = sessionEntities.map { ConfigOption(it.id, it.name) }
-            
-            val currStepStr = db.globalSettingDao().get("curr_step") ?: "1"
-            val currStep = currStepStr.toIntOrNull() ?: 1
-
-            val sourceTable = allItems.filter { it.isActive }.sortedWith(compareBy(
-                { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
-                { it.numExercise.toIntOrNull() ?: 0 },
-                { it.numFile.toIntOrNull() ?: 0 }
-            ))
-
-            val selectedItems = mutableListOf<VideoItem>()
-            val changedExercises = mutableSetOf<String>()
-            val slotGroups = sourceTable.groupBy { it.exerciseId }
-            val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-            for (group in slotGroups.values) {
-                val firstRow = group.first()
-                val exId = firstRow.exerciseId
-                val currentState = sharedPrefs.getString("cat_$exId", "000")?.toIntOrNull() ?: 0
-                var nextStep = currentState + 1
+            fileLock.withLock {
+                val allItems = db.videoItemDao().getAll().map { it.toDomain(context) }
+                val sessionEntities = db.configOptionDao().getByType("session")
+                val sessionOptions = sessionEntities.map { ConfigOption(it.id, it.name) }
                 
-                val exerciseFiles = sourceTable.filter { it.exerciseId == exId && it.numFile.isNotEmpty() }
-                if (exerciseFiles.isEmpty()) continue
-                val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                val resetVal = sharedPrefs.getString("reset_$exId", "001")?.toIntOrNull() ?: 1
-                if (nextStep > limit) nextStep = resetVal
-                
-                for (row in group) {
-                    if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
-                        selectedItems.add(row)
-                        saveCategoryState(context, exId, String.format(Locale.US, "%03d", nextStep))
-                        changedExercises.add(exId)
-                        break 
-                    }
-                }
-            }
+                val currStepStr = db.globalSettingDao().get("curr_step") ?: "1"
+                val currStep = currStepStr.toIntOrNull() ?: 1
 
-            val exerciseEntities = db.configOptionDao().getByType("exercise")
-            exerciseEntities.forEach { exEntity ->
-                val exId = exEntity.id
-                if (exId !in changedExercises) {
+                val sourceTable = allItems.filter { it.isActive }.sortedWith(compareBy(
+                    { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
+                    { it.numExercise.toIntOrNull() ?: 0 },
+                    { it.numFile.toIntOrNull() ?: 0 }
+                ))
+
+                val selectedItems = mutableListOf<VideoItem>()
+                val changedExercises = mutableSetOf<String>()
+                val slotGroups = sourceTable.groupBy { it.exerciseId }
+                val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+                for (group in slotGroups.values) {
+                    val firstRow = group.first()
+                    val exId = firstRow.exerciseId
                     val currentState = sharedPrefs.getString("cat_$exId", "000")?.toIntOrNull() ?: 0
+                    var nextStep = currentState + 1
+                    
                     val exerciseFiles = sourceTable.filter { it.exerciseId == exId && it.numFile.isNotEmpty() }
-                    if (exerciseFiles.isNotEmpty()) {
-                        val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
-                        val resetVal = sharedPrefs.getString("reset_$exId", "001")?.toIntOrNull() ?: 1
-                        var nextStep = currentState + 1
-                        if (nextStep > limit) nextStep = resetVal
-                        saveCategoryState(context, exId, String.format(Locale.US, "%03d", nextStep))
+                    if (exerciseFiles.isEmpty()) continue
+                    val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+                    val resetVal = sharedPrefs.getString("reset_$exId", "001")?.toIntOrNull() ?: 1
+                    if (nextStep > limit) nextStep = resetVal
+                    
+                    for (row in group) {
+                        if (nextStep == (row.numFile.toIntOrNull() ?: 0)) {
+                            selectedItems.add(row)
+                            saveCategoryState(context, exId, String.format(Locale.US, "%03d", nextStep))
+                            changedExercises.add(exId)
+                            break 
+                        }
                     }
                 }
-            }
 
-            selectedItems.forEach { item ->
-                val fileNum = item.numFile.toIntOrNull() ?: 1
-                item.timings.forEach { t ->
-                    if (t.max > 0) {
-                        val multiplier = when(t.multType) {
-                            1 -> t.multVal.toLong()
-                            2 -> fileNum.toLong()
-                            else -> 1L
+                val exerciseEntities = db.configOptionDao().getByType("exercise")
+                exerciseEntities.forEach { exEntity ->
+                    val exId = exEntity.id
+                    if (exId !in changedExercises) {
+                        val currentState = sharedPrefs.getString("cat_$exId", "000")?.toIntOrNull() ?: 0
+                        val exerciseFiles = sourceTable.filter { it.exerciseId == exId && it.numFile.isNotEmpty() }
+                        if (exerciseFiles.isNotEmpty()) {
+                            val limit = exerciseFiles.maxOf { it.numFile.toIntOrNull() ?: 0 }
+                            val resetVal = sharedPrefs.getString("reset_$exId", "001")?.toIntOrNull() ?: 1
+                            var nextStep = currentState + 1
+                            if (nextStep > limit) nextStep = resetVal
+                            saveCategoryState(context, exId, String.format(Locale.US, "%03d", nextStep))
                         }
-                        val newCurr = if (t.step <= 0L) {
-                            t.max
-                        } else if (currStep == 0) {
-                            when {
-                                t.curr == -1L -> 0L
-                                t.curr == 0L -> -t.step
-                                t.curr < 0L -> t.step * multiplier
-                                else -> t.curr + (t.step * multiplier)
+                    }
+                }
+
+                selectedItems.forEach { item ->
+                    val fileNum = item.numFile.toIntOrNull() ?: 1
+                    item.timings.forEach { t ->
+                        if (t.max > 0) {
+                            val multiplier = when(t.multType) {
+                                1 -> t.multVal.toLong()
+                                2 -> fileNum.toLong()
+                                else -> 1L
                             }
-                        } else {
-                            if (t.curr < 0) t.step * multiplier else t.curr + (t.step * multiplier)
+                            val newCurr = if (t.step <= 0L) {
+                                t.max
+                            } else if (currStep == 0) {
+                                when {
+                                    t.curr == -1L -> 0L
+                                    t.curr == 0L -> -t.step
+                                    t.curr < 0L -> t.step * multiplier
+                                    else -> t.curr + (t.step * multiplier)
+                                }
+                            } else {
+                                if (t.curr < 0) t.step * multiplier else t.curr + (t.step * multiplier)
+                            }
+                            t.curr = newCurr.coerceAtMost(t.max)
                         }
-                        t.curr = newCurr.coerceAtMost(t.max)
                     }
                 }
-            }
 
-            selectedItems.sortWith(compareBy(
-                { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
-                { it.numExercise.toIntOrNull() ?: 0 },
-                { it.numFile.toIntOrNull() ?: 0 }
-            ))
+                selectedItems.sortWith(compareBy(
+                    { item -> extractNumber(sessionOptions.find { it.id == item.sessionId }?.name ?: "") },
+                    { it.numExercise.toIntOrNull() ?: 0 },
+                    { it.numFile.toIntOrNull() ?: 0 }
+                ))
 
-            val titlesArray = JSONArray()
-            selectedItems.forEach { selected ->
-                val entry = JSONArray()
-                entry.put(selected.id).put(0).put(0).put(0L)
-                titlesArray.put(entry)
+                val titlesArray = JSONArray()
+                selectedItems.forEach { selected ->
+                    val entry = JSONArray()
+                    entry.put(selected.id).put(0).put(0).put(0L)
+                    titlesArray.put(entry)
+                }
+                sharedPrefs.edit { putString(KEY_PLAYLIST, titlesArray.toString()) }
+                
+                db.videoItemDao().insertAll(allItems.map { it.toEntity() })
             }
-            sharedPrefs.edit { putString(KEY_PLAYLIST, titlesArray.toString()) }
-            
-            db.videoItemDao().insertAll(allItems.map { it.toEntity() })
         }
 
         fun VideoItem.toEntity(): VideoItemEntity {
@@ -211,13 +209,18 @@ class SettingsActivity : AppCompatActivity() {
             val vi = VideoItem(id, sessionId, exerciseId, numExercise, numFile, fileName, fileSizeRaw, note, mutableListOf(), customName, isActive, isSizeHighlighted, sortOrder)
             try {
                 val tArr = JSONArray(timings)
-                val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 for (i in 0 until tArr.length()) {
                     val tObj = tArr.getJSONObject(i)
-                    val time = tObj.getInt("t")
-                    val dbCurr = if (tObj.has("c")) tObj.getLong("c") else -1L
-                    val currVal = if (dbCurr == -1L) sharedPrefs.getLong("curr_${id}_$time", -1L) else dbCurr
-                    vi.timings.add(Timing(time, tObj.optLong("m", 0L), currVal, tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false)))
+                    val currVal = if (tObj.has("c")) tObj.getLong("c") else -1L
+                    vi.timings.add(Timing(
+                        tObj.getInt("t"), 
+                        tObj.optLong("m", 0L), 
+                        currVal, 
+                        tObj.optLong("s", 0L), 
+                        tObj.optInt("mt", 0), 
+                        tObj.optInt("mv", 1), 
+                        tObj.optBoolean("en", false)
+                    ))
                 }
             } catch (e: Exception) { Log.e(TAG, "Error parsing timings", e) }
             return vi
@@ -231,6 +234,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etTopInput: EditText
     private lateinit var btnLaunch: Button
     private lateinit var btnHelp: ImageButton
+    private lateinit var cbShowLaunch: CheckBox
     private lateinit var loadingOverlay: View
     
     private lateinit var hColor: TextView
@@ -246,7 +250,6 @@ class SettingsActivity : AppCompatActivity() {
     private var sessionMap = mapOf<String, String>()
     private var exerciseMap = mapOf<String, String>()
     private var activeExercisesOrder = mutableListOf<String>()
-    private var cachedConfigUri: Uri? = null
 
     private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
@@ -254,7 +257,6 @@ class SettingsActivity : AppCompatActivity() {
                 contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 saveSelectedFolderUri(it)
                 displaySelectedFolder(it)
-                cachedConfigUri = null
                 performFullRefresh()
             } catch (e: Exception) { Log.e(TAG, getString(R.string.error_permission), e) }
         }
@@ -287,6 +289,7 @@ class SettingsActivity : AppCompatActivity() {
         etTopInput = findViewById(R.id.et_top_input)
         btnLaunch = findViewById(R.id.btn_launch)
         btnHelp = findViewById(R.id.btn_help)
+        cbShowLaunch = findViewById(R.id.cb_show_launch)
         loadingOverlay = findViewById(R.id.loading_overlay)
         
         hColor = findViewById(R.id.header_color); hCat1 = findViewById(R.id.header_cat1)
@@ -295,6 +298,13 @@ class SettingsActivity : AppCompatActivity() {
 
         btnLaunch.setOnClickListener { performLaunchStep() }
         btnHelp.setOnClickListener { showHelpDialog() }
+        
+        cbShowLaunch.setOnClickListener {
+            val isChecked = (it as CheckBox).isChecked
+            lifecycleScope.launch(Dispatchers.IO) {
+                db.globalSettingDao().set(GlobalSettingEntity("button", if (isChecked) "1" else "0"))
+            }
+        }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = VideoListAdapter()
@@ -312,22 +322,24 @@ class SettingsActivity : AppCompatActivity() {
             combine(
                 db.videoItemDao().getAllFlow().distinctUntilChanged(),
                 db.configOptionDao().getByTypeFlow("session").distinctUntilChanged(),
-                db.configOptionDao().getByTypeFlow("exercise").distinctUntilChanged()
-            ) { items, sessions, exercises ->
-                Triple(items, sessions, exercises)
-            }.collectLatest { (items, sessions, exercises) ->
-                sessionOptions = sessions.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
-                exerciseOptions = exercises.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
+                db.configOptionDao().getByTypeFlow("exercise").distinctUntilChanged(),
+                db.globalSettingDao().getFlow("button").distinctUntilChanged()
+            ) { items, sessions, exercises, btnVis ->
+                Quad(items, sessions, exercises, btnVis)
+            }.collectLatest { res ->
+                sessionOptions = res.sessions.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
+                exerciseOptions = res.exercises.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
                 sessionMap = sessionOptions.associate { it.id to it.name }
                 exerciseMap = exerciseOptions.associate { it.id to it.name }
                 
-                val domainItems = items.map { it.toDomain(this@SettingsActivity) }
+                val domainItems = res.items.map { it.toDomain(this@SettingsActivity) }
                 adapter.submitList(domainItems)
                 
                 etTopInput.setText(calculateTopInputText(domainItems, exerciseMap))
                 
-                val btnVisStr = db.globalSettingDao().get("button") ?: "0"
-                btnLaunch.visibility = if (btnVisStr == "1") View.VISIBLE else View.GONE
+                val isVis = res.btnVis == "1"
+                btnLaunch.visibility = if (isVis) View.VISIBLE else View.GONE
+                if (cbShowLaunch.isChecked != isVis) cbShowLaunch.isChecked = isVis
                 
                 val tTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
                 tvSetTime.text = tTime
@@ -336,6 +348,8 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
     }
+    
+    private data class Quad<A, B, C, D>(val items: A, val sessions: B, val exercises: C, val btnVis: D)
 
     private fun showHelpDialog() {
         val scroll = ScrollView(this)
@@ -363,14 +377,12 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun performLaunchStep() {
         lifecycleScope.launch(Dispatchers.IO) {
-            fileLock.withLock {
-                applyLaunchLogicDB(this@SettingsActivity, db)
-                withContext(Dispatchers.Main) {
-                    val playlistStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_PLAYLIST, null)
-                    val count = if (playlistStr != null) JSONArray(playlistStr).length() else 0
-                    if (count == 0) Toast.makeText(this@SettingsActivity, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
-                    else Toast.makeText(this@SettingsActivity, getString(R.string.files_found_count, count), Toast.LENGTH_SHORT).show()
-                }
+            applyLaunchLogicDB(this@SettingsActivity, db)
+            withContext(Dispatchers.Main) {
+                val playlistStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_PLAYLIST, null)
+                val count = if (playlistStr != null) JSONArray(playlistStr).length() else 0
+                if (count == 0) Toast.makeText(this@SettingsActivity, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
+                else Toast.makeText(this@SettingsActivity, getString(R.string.files_found_count, count), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -592,12 +604,17 @@ class SettingsActivity : AppCompatActivity() {
                 val vi = VideoItem(id = j.optString("id", generateId()), sessionId = j.optString("s_id"), exerciseId = j.optString("e_id"), numExercise = j.optString("n_e"), numFile = j.optString("n_f"), fileName = j.optString("f_n"), fileSizeRaw = j.optLong("f_sz"), note = j.optString("note"), customName = j.optString("c_n"), isActive = j.optBoolean("is_a", false), isSizeHighlighted = j.optBoolean("is_sh", false), sortOrder = j.optInt("so", 0))
                 val tArr = j.optJSONArray("timings")
                 if (tArr != null) {
-                    val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     for (i in 0 until tArr.length()) { 
-                        val tObj = tArr.getJSONObject(i); val time = tObj.getInt("t")
-                        val dbCurr = if (tObj.has("c")) tObj.getLong("c") else -1L
-                        val currVal = if (dbCurr == -1L) sharedPrefs.getLong("curr_${vi.id}_$time", -1L) else dbCurr
-                        vi.timings.add(Timing(time, tObj.optLong("m", 0L), currVal, tObj.optLong("s", 0L), tObj.optInt("mt", 0), tObj.optInt("mv", 1), tObj.optBoolean("en", false))) 
+                        val tObj = tArr.getJSONObject(i)
+                        vi.timings.add(Timing(
+                            tObj.getInt("t"), 
+                            tObj.optLong("m", 0L), 
+                            tObj.optLong("c", -1L), 
+                            tObj.optLong("s", 0L), 
+                            tObj.optInt("mt", 0), 
+                            tObj.optInt("mv", 1), 
+                            tObj.optBoolean("en", false)
+                        )) 
                     }
                 }
                 return vi
@@ -611,7 +628,7 @@ class SettingsActivity : AppCompatActivity() {
         inner class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
             private val indicator: View = v.findViewById(R.id.col_color_indicator); private val sN: TextView = v.findViewById(R.id.col_session_name); private val nE: TextView = v.findViewById(R.id.col_num_exercise); private val eN: TextView = v.findViewById(R.id.col_exercise_name); private val nF: TextView = v.findViewById(R.id.col_num_file); private val fN: TextView = v.findViewById(R.id.col_file_name); private val fS: TextView = v.findViewById(R.id.col_file_size); private val note: TextView = v.findViewById(R.id.col_note); private val sizeIndicator: View = v.findViewById(R.id.col_file_size_indicator)
             fun bind(item: VideoItem) {
-                indicator.setBackgroundColor(if (item.isActive) 0xFF99CC00.toInt() else 0xFFF44336.toInt())
+                indicator.setBackgroundColor(if (item.isActive && item.isComplete()) 0xFF99CC00.toInt() else 0xFFF44336.toInt())
                 sizeIndicator.visibility = if (item.isSizeHighlighted) View.VISIBLE else View.GONE
                 sN.text = sessionMap[item.sessionId] ?: ""; nE.text = item.numExercise; eN.text = exerciseMap[item.exerciseId] ?: ""; nF.text = item.numFile; fN.text = if (item.customName.isNotEmpty()) item.customName else item.fileName; note.text = item.note; fS.text = formatFileSize(item.fileSizeRaw)
                 
@@ -650,10 +667,10 @@ class SettingsActivity : AppCompatActivity() {
                 dialog.setOnShowListener { tintDialogButtons(dialog, true) }; dialog.show()
             }
             private fun showAddSessionDialog(id: String) {
-                val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }; var selectedNum = ""; val numDisplay = TextView(this@SettingsActivity).apply { text = getString(R.string.session_no_not_selected); gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }; val numBtn = ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_menu_sort_by_size); setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER }; setOnClickListener { btn -> val used = sessionOptions.map { it.name.split(" ")[0] }.toSet(); val available = (1..9).map { it.toString() }.filter { !used.contains(it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, available)); listPopup.anchorView = btn; listPopup.width = (80 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> selectedNum = available[pos]; numDisplay.text = getString(R.string.session_number_selected, selectedNum); listPopup.dismiss() }; listPopup.show() } }; val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }; layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput); val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_session)).setView(layout).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = nameInput.text.toString().trim(); if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show(); return@setPositiveButton }; val combined = "$selectedNum $name"; val newId = generateId(); lifecycleScope.launch(Dispatchers.IO) { db.configOptionDao().insertAll(listOf(ConfigOptionEntity(newId, "session", combined))) ; updateItemById(id) { it.copy(sessionId = newId) } } }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
+                val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 20, 40, 0) }; var selectedNum = ""; val numDisplay = TextView(this@SettingsActivity).apply { text = getString(R.string.session_no_not_selected); gravity = Gravity.CENTER; setPadding(0, 8, 0, 8) }; val numBtn = ImageButton(this@SettingsActivity).apply { setImageResource(android.R.drawable.ic_menu_sort_by_size); setColorFilter(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_green_dark), PorterDuff.Mode.SRC_IN); background = ContextCompat.getDrawable(this@SettingsActivity, R.drawable.btn_round_bg); layoutParams = LinearLayout.LayoutParams(50, 50).apply { gravity = Gravity.CENTER }; setOnClickListener { btn -> val used = sessionOptions.map { it.name.split(" ")[0] }.toSet(); val available = (1..9).map { it.toString() }.filter { !used.contains(it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, available)); listPopup.anchorView = btn; listPopup.width = (80 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> selectedNum = available[pos]; numDisplay.text = getString(R.string.session_number_selected, selectedNum); listPopup.dismiss() }; listPopup.show() } }; val nameInput = EditText(this@SettingsActivity).apply { hint = getString(R.string.name_hint) }; layout.addView(numBtn); layout.addView(numDisplay); layout.addView(nameInput); val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_session)).setView(layout).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = nameInput.text.toString().trim(); if (selectedNum.isEmpty()) { Toast.makeText(this@SettingsActivity, getString(R.string.select_number), Toast.LENGTH_SHORT).show(); return@setPositiveButton }; val combined = "$selectedNum $name"; val newId = generateId(); lifecycleScope.launch(Dispatchers.IO) { db.configOptionDao().insertAll(listOf(ConfigOptionEntity(newId, "session", combined))); updateItemById(id) { val updated = it.copy(sessionId = newId, numExercise = ""); if (!updated.isComplete()) updated.copy(isActive = false) else updated } } }.setNegativeButton(getString(R.string.dialog_cancel), null).create()
                 dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show()
             }
-            private fun showAddExerciseDialog(id: String) { val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }; val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_exercise)).setView(input).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = input.text.toString().trim(); if (name.isNotEmpty()) { val newId = generateId(); lifecycleScope.launch(Dispatchers.IO) { saveCategoryState(this@SettingsActivity, newId, "000"); saveResetState(this@SettingsActivity, newId, "001"); db.configOptionDao().insertAll(listOf(ConfigOptionEntity(newId, "exercise", name))) ; updateItemById(id) { it.copy(exerciseId = newId) } } } }.setNegativeButton(getString(R.string.dialog_cancel), null).create(); dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show() }
+            private fun showAddExerciseDialog(id: String) { val input = EditText(this@SettingsActivity).apply { hint = getString(R.string.exercise_name_hint) }; val dialog = AlertDialog.Builder(this@SettingsActivity).setTitle(getString(R.string.new_exercise)).setView(input).setPositiveButton(getString(R.string.dialog_ok)) { _, _ -> val name = input.text.toString().trim(); if (name.isNotEmpty()) { val newId = generateId(); lifecycleScope.launch(Dispatchers.IO) { saveCategoryState(this@SettingsActivity, newId, "000"); saveResetState(this@SettingsActivity, newId, "001"); db.configOptionDao().insertAll(listOf(ConfigOptionEntity(newId, "exercise", name))); updateItemById(id) { val updated = it.copy(exerciseId = newId, numFile = ""); if (!updated.isComplete()) updated.copy(isActive = false) else updated } } } }.setNegativeButton(getString(R.string.dialog_cancel), null).create(); dialog.setOnShowListener { tintDialogButtons(dialog) }; dialog.show() }
         }
     }
 

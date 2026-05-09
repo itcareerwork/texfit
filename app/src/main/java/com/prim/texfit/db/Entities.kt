@@ -2,9 +2,6 @@ package com.prim.texfit.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import androidx.room.TypeConverter
-import org.json.JSONArray
-import org.json.JSONObject
 
 @Entity(tableName = "video_items")
 data class VideoItemEntity(
@@ -20,7 +17,7 @@ data class VideoItemEntity(
     val customName: String,
     val isActive: Boolean,
     val isSizeHighlighted: Boolean,
-    val sortOrder: Int = 0 // Поле для стабильной сортировки
+    val sortOrder: Int = 0 
 )
 
 @Entity(tableName = "config_options")
@@ -35,16 +32,3 @@ data class GlobalSettingEntity(
     @PrimaryKey val key: String,
     val value: String
 )
-
-class Converters {
-    @TypeConverter
-    fun fromString(value: String): List<String> {
-        if (value.isEmpty()) return emptyList()
-        return value.split(",")
-    }
-
-    @TypeConverter
-    fun fromList(list: List<String>): String {
-        return list.joinToString(",")
-    }
-}

@@ -25,13 +25,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.prim.texfit.db.AppDatabase
-import com.prim.texfit.SettingsActivity.Companion.toDomain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 import java.util.Calendar
 import java.util.concurrent.Semaphore
 
@@ -45,14 +43,11 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS_NAME = "TexfitPrefs"
         private const val SELECTED_FOLDER_URI_KEY = "selectedFolderUri"
-        private const val CONFIG_FILE_NAME = "texfit.cfg"
         private const val TAG = "MainActivity"
         
-        // Ключи для SharedPreferences
         private const val KEY_PLAYLIST = "playlist_data"
         private const val KEY_TRAINING_TIME = "training_time_val"
         private const val KEY_LAST_LAUNCH = "last_auto_launch_ts"
-        private const val CONFIG_FILE_URI_KEY = "configFileUri"
         private val thumbnailDecodeSemaphore = Semaphore(2)
     }
 
@@ -117,34 +112,6 @@ class MainActivity : AppCompatActivity() {
         try {
             SettingsActivity.applyLaunchLogicDB(this, db)
         } catch (e: Exception) { Log.e(TAG, "Daily update failed", e) }
-    }
-
-    private fun getFileLastModified(uri: Uri): Long {
-        return try {
-            contentResolver.query(uri, arrayOf(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val index = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                    if (index != -1) cursor.getLong(index) else 0L
-                } else -1L
-            } ?: -1L
-        } catch (e: Exception) { -1L }
-    }
-
-    private fun getConfigFileUri(): Uri? {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val cachedUriStr = prefs.getString(CONFIG_FILE_URI_KEY, null)
-        if (cachedUriStr != null) {
-            val uri = Uri.parse(cachedUriStr)
-            if (getFileLastModified(uri) != -1L) return uri
-            else prefs.edit().remove(CONFIG_FILE_URI_KEY).apply()
-        }
-
-        val folderUriStr = prefs.getString(SELECTED_FOLDER_URI_KEY, null) ?: return null
-        val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderUriStr)) ?: return null
-        val configFile = findConfigFile(folder) ?: return null
-        
-        prefs.edit().putString(CONFIG_FILE_URI_KEY, configFile.uri.toString()).apply()
-        return configFile.uri
     }
 
     private fun loadPlaylistFromConfig() {
@@ -216,23 +183,11 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_settings -> {
-                val intent = Intent(this, SettingsActivity::class.java)
-                getConfigFileUri()?.let { uri ->
-                    intent.putExtra("config_uri", uri)
-                }
-                startActivity(intent)
+                startActivity(Intent(this, SettingsActivity::class.java))
                 overridePendingTransition(0, 0)
                 true
             }
             else -> super.onOptionsItemSelected(item)
-        }
-    }
-
-    private fun findConfigFile(folder: DocumentFile): DocumentFile? {
-        folder.findFile(CONFIG_FILE_NAME)?.let { return it }
-        return folder.listFiles().firstOrNull { file ->
-            val name = file.name ?: return@firstOrNull false
-            name == CONFIG_FILE_NAME || name.startsWith("$CONFIG_FILE_NAME.")
         }
     }
 

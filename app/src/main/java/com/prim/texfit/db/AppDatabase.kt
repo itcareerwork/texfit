@@ -4,10 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
 
 @Database(entities = [VideoItemEntity::class, ConfigOptionEntity::class, GlobalSettingEntity::class], version = 2, exportSchema = false)
-@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun videoItemDao(): VideoItemDao
     abstract fun configOptionDao(): ConfigOptionDao
@@ -24,7 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "texfit_database"
                 )
-                .fallbackToDestructiveMigration() // Позволяет обновить схему (версия 2), удалив старую БД
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance
