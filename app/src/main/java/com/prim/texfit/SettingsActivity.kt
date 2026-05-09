@@ -234,7 +234,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etTopInput: EditText
     private lateinit var btnLaunch: Button
     private lateinit var btnHelp: ImageButton
-    private lateinit var cbShowLaunch: CheckBox
     private lateinit var loadingOverlay: View
     
     private lateinit var hColor: TextView
@@ -289,7 +288,6 @@ class SettingsActivity : AppCompatActivity() {
         etTopInput = findViewById(R.id.et_top_input)
         btnLaunch = findViewById(R.id.btn_launch)
         btnHelp = findViewById(R.id.btn_help)
-        cbShowLaunch = findViewById(R.id.cb_show_launch)
         loadingOverlay = findViewById(R.id.loading_overlay)
         
         hColor = findViewById(R.id.header_color); hCat1 = findViewById(R.id.header_cat1)
@@ -299,13 +297,6 @@ class SettingsActivity : AppCompatActivity() {
         btnLaunch.setOnClickListener { performLaunchStep() }
         btnHelp.setOnClickListener { showHelpDialog() }
         
-        cbShowLaunch.setOnClickListener {
-            val isChecked = (it as CheckBox).isChecked
-            lifecycleScope.launch(Dispatchers.IO) {
-                db.globalSettingDao().set(GlobalSettingEntity("button", if (isChecked) "1" else "0"))
-            }
-        }
-
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = VideoListAdapter()
         recyclerView.adapter = adapter
@@ -320,26 +311,21 @@ class SettingsActivity : AppCompatActivity() {
     private fun setupReactiveUI() {
         lifecycleScope.launch {
             combine(
-                db.videoItemDao().getAllFlow().distinctUntilChanged(),
-                db.configOptionDao().getByTypeFlow("session").distinctUntilChanged(),
-                db.configOptionDao().getByTypeFlow("exercise").distinctUntilChanged(),
-                db.globalSettingDao().getFlow("button").distinctUntilChanged()
-            ) { items, sessions, exercises, btnVis ->
-                Quad(items, sessions, exercises, btnVis)
+                db.videoItemDao().getAllFlow(),
+                db.configOptionDao().getByTypeFlow("session"),
+                db.configOptionDao().getByTypeFlow("exercise")
+            ) { items, sessions, exercises ->
+                Triple(items, sessions, exercises)
             }.collectLatest { res ->
-                sessionOptions = res.sessions.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
-                exerciseOptions = res.exercises.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
+                sessionOptions = res.second.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
+                exerciseOptions = res.third.map { ConfigOption(it.id, it.name) }.sortedBy { extractNumber(it.name) }.toMutableList()
                 sessionMap = sessionOptions.associate { it.id to it.name }
                 exerciseMap = exerciseOptions.associate { it.id to it.name }
                 
-                val domainItems = res.items.map { it.toDomain(this@SettingsActivity) }
+                val domainItems = res.first.map { it.toDomain(this@SettingsActivity) }
                 adapter.submitList(domainItems)
                 
-                etTopInput.setText(calculateTopInputText(domainItems, exerciseMap))
-                
-                val isVis = res.btnVis == "1"
-                btnLaunch.visibility = if (isVis) View.VISIBLE else View.GONE
-                if (cbShowLaunch.isChecked != isVis) cbShowLaunch.isChecked = isVis
+                updateTopStatus()
                 
                 val tTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
                 tvSetTime.text = tTime
@@ -349,8 +335,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
-    private data class Quad<A, B, C, D>(val items: A, val sessions: B, val exercises: C, val btnVis: D)
-
     private fun showHelpDialog() {
         val scroll = ScrollView(this)
         val textView = TextView(this).apply {
@@ -365,12 +349,35 @@ class SettingsActivity : AppCompatActivity() {
         tintDialogButtons(dialog)
     }
 
+    /**
+     * Выполняет точечное обновление полей видео-айтема в БД для предотвращения Race Condition с плеером.
+     */
     private fun updateItemById(id: String, transformer: (VideoItem) -> VideoItem) {
         lifecycleScope.launch(Dispatchers.IO) {
             db.videoItemDao().getById(id)?.let { entity ->
                 val domain = entity.toDomain(this@SettingsActivity)
                 val updated = transformer(domain)
-                db.videoItemDao().update(updated.toEntity())
+                
+                // Проверяем каждое поле и вызываем специализированный метод UPDATE в DAO.
+                // Это гарантирует, что колонка 'timings' не будет затерта старым значением из памяти.
+                if (updated.isActive != domain.isActive) {
+                    db.videoItemDao().updateIsActive(id, updated.isActive)
+                }
+                if (updated.sessionId != domain.sessionId || updated.numExercise != domain.numExercise) {
+                    db.videoItemDao().updateSessionLink(id, updated.sessionId, updated.numExercise, updated.isActive)
+                }
+                if (updated.exerciseId != domain.exerciseId || updated.numFile != domain.numFile) {
+                    db.videoItemDao().updateExerciseLink(id, updated.exerciseId, updated.numFile, updated.isActive)
+                }
+                if (updated.customName != domain.customName) {
+                    db.videoItemDao().updateCustomName(id, updated.customName)
+                }
+                if (updated.note != domain.note) {
+                    db.videoItemDao().updateNote(id, updated.note)
+                }
+                if (updated.isSizeHighlighted != domain.isSizeHighlighted) {
+                    db.videoItemDao().updateSizeHighlight(id, updated.isSizeHighlighted)
+                }
             }
         }
     }
@@ -379,6 +386,7 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             applyLaunchLogicDB(this@SettingsActivity, db)
             withContext(Dispatchers.Main) {
+                updateTopStatus()
                 val playlistStr = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_PLAYLIST, null)
                 val count = if (playlistStr != null) JSONArray(playlistStr).length() else 0
                 if (count == 0) Toast.makeText(this@SettingsActivity, getString(R.string.no_active_exercises), Toast.LENGTH_SHORT).show()
@@ -392,6 +400,10 @@ class SettingsActivity : AppCompatActivity() {
         val units = arrayOf(getString(R.string.unit_b), getString(R.string.unit_kb), getString(R.string.unit_mb), getString(R.string.unit_gb), getString(R.string.unit_tb))
         val digitGroups = (log10(size.toDouble()) / log10(1024.0)).toInt().coerceIn(0, units.size - 1)
         return String.format(Locale.US, "%.1f %s", size / 1024.0.pow(digitGroups.toDouble()), units[digitGroups])
+    }
+
+    private fun updateTopStatus() {
+        etTopInput.setText(calculateTopInputText(adapter.currentList, exerciseMap))
     }
 
     private fun calculateTopInputText(items: List<VideoItem>, eMap: Map<String, String>): String {
@@ -537,7 +549,11 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             fileLock.withLock {
                 try {
-                    val folder = getFolderDocumentFile() ?: return@withLock
+                    val folder = getFolderDocumentFile()
+                    if (folder == null) {
+                        withContext(Dispatchers.Main) { loadingOverlay.visibility = View.GONE }
+                        return@withLock
+                    }
                     val filesInFolder = folder.listFiles().filter { it.name?.endsWith(".mp4", ignoreCase = true) == true }
                     val fileNamesInFolder = filesInFolder.map { it.name ?: "" }.toSet()
                     
@@ -555,6 +571,8 @@ class SettingsActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Refresh error", e)
                     withContext(Dispatchers.Main) { Toast.makeText(this@SettingsActivity, getString(R.string.error_reading), Toast.LENGTH_SHORT).show() }
+                } finally {
+                    withContext(Dispatchers.Main) { loadingOverlay.visibility = View.GONE }
                 }
             }
         }
@@ -577,6 +595,8 @@ class SettingsActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) { Toast.makeText(this@SettingsActivity, getString(R.string.sorted_msg), Toast.LENGTH_SHORT).show() }
                 } catch (e: Exception) {
                     Log.e(TAG, "Sort error", e)
+                } finally {
+                    withContext(Dispatchers.Main) { loadingOverlay.visibility = View.GONE }
                 }
             }
         }
@@ -650,7 +670,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (title == getString(R.string.header_exercise)) {
                         val layout = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(40, 20, 40, 0); weightSum = 2f }; val leftBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }; leftBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_position); textSize = 12f }); val leftValue = TextView(this@SettingsActivity).apply { text = getCategoryState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; leftValue.setOnClickListener { v -> val optionsList = (0..999).map { String.format(Locale.US, "%03d", it) }; val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> leftValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; leftBox.addView(leftValue); val rightBox = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setPadding(20, 0, 0, 0) }; rightBox.addView(TextView(this@SettingsActivity).apply { text = getString(R.string.label_reset_to); textSize = 12f }); val rightValue = TextView(this@SettingsActivity).apply { text = getResetState(this@SettingsActivity, selected.id); textSize = 18f; gravity = Gravity.CENTER; setBackgroundResource(android.R.drawable.editbox_background_normal) }; rightValue.setOnClickListener { v -> val optionsList = listOf("000", "001"); val listPopup = ListPopupWindow(this@SettingsActivity); listPopup.setAdapter(ArrayAdapter(this@SettingsActivity, android.R.layout.simple_list_item_1, optionsList)); listPopup.anchorView = v; listPopup.width = (100 * resources.displayMetrics.density).toInt(); listPopup.setOnItemClickListener { _, _, pos, _ -> rightValue.text = optionsList[pos]; listPopup.dismiss() }; listPopup.show() }; rightBox.addView(rightValue); layout.addView(leftBox); layout.addView(rightBox); builder.setView(layout)
                         builder.setNeutralButton(getString(R.string.delete)) { _, _ -> lifecycleScope.launch(Dispatchers.IO) { db.videoItemDao().clearExerciseReferences(selected.id); db.configOptionDao().deleteById(selected.id) }; alertDialog?.dismiss() }
-                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); alertDialog?.dismiss() }
+                        builder.setPositiveButton(getString(R.string.dialog_save)) { _, _ -> saveCategoryState(this@SettingsActivity, selected.id, leftValue.text.toString()); saveResetState(this@SettingsActivity, selected.id, rightValue.text.toString()); updateTopStatus(); alertDialog?.dismiss() }
                     } else { 
                         builder.setMessage(selected.name).setNeutralButton(getString(R.string.delete)) { _, _ -> lifecycleScope.launch(Dispatchers.IO) { db.videoItemDao().clearSessionReferences(selected.id); db.configOptionDao().deleteById(selected.id) }; alertDialog?.dismiss() } 
                     }

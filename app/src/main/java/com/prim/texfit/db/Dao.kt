@@ -20,6 +20,28 @@ interface VideoItemDao {
     @Update
     suspend fun update(item: VideoItemEntity)
 
+    // ТОЧЕЧНЫЕ ОБНОВЛЕНИЯ для предотвращения Race Condition
+    @Query("UPDATE video_items SET timings = :timings WHERE id = :id")
+    suspend fun updateTimings(id: String, timings: String)
+
+    @Query("UPDATE video_items SET isActive = :isActive WHERE id = :id")
+    suspend fun updateIsActive(id: String, isActive: Boolean)
+
+    @Query("UPDATE video_items SET sessionId = :sId, numExercise = :nE, isActive = :active WHERE id = :id")
+    suspend fun updateSessionLink(id: String, sId: String, nE: String, active: Boolean)
+
+    @Query("UPDATE video_items SET exerciseId = :eId, numFile = :nF, isActive = :active WHERE id = :id")
+    suspend fun updateExerciseLink(id: String, eId: String, nF: String, active: Boolean)
+
+    @Query("UPDATE video_items SET customName = :name WHERE id = :id")
+    suspend fun updateCustomName(id: String, name: String)
+
+    @Query("UPDATE video_items SET note = :note WHERE id = :id")
+    suspend fun updateNote(id: String, note: String)
+
+    @Query("UPDATE video_items SET isSizeHighlighted = :highlight WHERE id = :id")
+    suspend fun updateSizeHighlight(id: String, highlight: Boolean)
+
     @Query("DELETE FROM video_items WHERE id = :id")
     suspend fun deleteById(id: String)
 

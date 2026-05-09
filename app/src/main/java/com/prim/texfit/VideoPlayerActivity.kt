@@ -71,7 +71,6 @@ class VideoPlayerActivity : Activity() {
     private lateinit var tvBottomStopwatchTime: TextView
     private lateinit var tvStopwatchStatusLabel: TextView
 
-    // Элементы управления упражнением на экране
     private lateinit var layoutExerciseControls: View
     private lateinit var tvControlSegmentLabel: TextView
     private lateinit var swExerciseEnabled: SwitchCompat
@@ -87,12 +86,10 @@ class VideoPlayerActivity : Activity() {
     private lateinit var btnControlDelete: Button
     private lateinit var btnControlGeneralSettings: Button
 
-    // Кнопки тонкой настройки
     private lateinit var btnFineBack: ImageButton
     private lateinit var btnFineForward: ImageButton
     private lateinit var btnPlayNoTimer: ImageButton
 
-    // Кнопки звука
     private lateinit var layoutAudioControls: View
     private lateinit var btnMuteVideo: ImageButton
     private lateinit var btnMuteTimer: ImageButton
@@ -109,7 +106,6 @@ class VideoPlayerActivity : Activity() {
     private var isTimerMuted: Boolean = false
     private var isIgnoreTimerMode: Boolean = false
 
-    // Промежуточные переменные
     private var pendingEnabled: Boolean = false
     private var pendingMultType: Int = 0
     private var pendingMultVal: Int = 1
@@ -562,8 +558,6 @@ class VideoPlayerActivity : Activity() {
             val sorted = timings.sortedBy { it.time }
             val labelWidth = dpToPx(60f)
             
-            // SeekBar высотой 48dp прижата к низу. Полоса прогресса в ней 18dp.
-            // Центр полосы прогресса находится на 24dp от низа экрана.
             val trackCenterFromBottom = dpToPx(24f)
 
             sorted.forEachIndexed { index, timing ->
@@ -571,7 +565,6 @@ class VideoPlayerActivity : Activity() {
                 
                 val tickX = (timing.time.toFloat() / duration * width).toInt()
 
-                // Риска - точно поверх полосы прогресса
                 val tick = View(this).apply { setBackgroundColor(Color.WHITE); alpha = 0.7f }
                 val tickHeight = dpToPx(18f)
                 val tickParams = FrameLayout.LayoutParams(2, tickHeight)
@@ -581,7 +574,6 @@ class VideoPlayerActivity : Activity() {
                 layoutTicks.addView(tick, tickParams)
                 
                 if (isFromSettings) {
-                    // Время над риской (MM:SS) - в темной зоне (над SeekBar)
                     val tvPos = TextView(this).apply {
                         text = formatTime(timing.time)
                         setTextColor(Color.WHITE)
@@ -592,11 +584,9 @@ class VideoPlayerActivity : Activity() {
                     val posParams = FrameLayout.LayoutParams(labelWidth, FrameLayout.LayoutParams.WRAP_CONTENT)
                     posParams.leftMargin = tickX - labelWidth / 2
                     posParams.gravity = Gravity.BOTTOM
-                    // 48dp - высота SeekBar + небольшой зазор
                     posParams.bottomMargin = dpToPx(32f)
                     layoutTicks.addView(tvPos, posParams)
                     
-                    // Длительность отрезка (MM:SS) - точно в центре желтой линии
                     val nextTime = if (index < sorted.size - 1) sorted[index + 1].time else duration
                     val segmentDur = nextTime - timing.time
                     if (segmentDur > 1000) {
@@ -613,7 +603,6 @@ class VideoPlayerActivity : Activity() {
                         val durParams = FrameLayout.LayoutParams(labelWidth, FrameLayout.LayoutParams.WRAP_CONTENT)
                         durParams.leftMargin = midX - labelWidth / 2
                         durParams.gravity = Gravity.BOTTOM
-                        // Центрируем текст по высоте желтой линии (ее центр на 24dp)
                         durParams.bottomMargin = (trackCenterFromBottom - dpToPx(7f)).toInt()
                         layoutTicks.addView(tvDur, durParams)
                     }
@@ -639,10 +628,7 @@ class VideoPlayerActivity : Activity() {
             }
             prefs.edit().putString(KEY_PLAYLIST, titlesArray.toString()).apply()
             
-            // Sync timings 'curr' field back to DB as well
-            activityScope.launch {
-                saveTimingsToDB()
-            }
+            saveTimingsToDB()
         } catch (e: Exception) { Log.e("VideoPlayer", "Save pos to prefs error", e) }
     }
 
@@ -660,14 +646,22 @@ class VideoPlayerActivity : Activity() {
         } catch (e: Exception) { Log.e("VideoPlayer", "Load timings from DB error", e) }
     }
 
+    /**
+     * Выполняет точечное обновление колонки 'timings' в БД.
+     * Это предотвращает затирание данных об активности видео, если они были изменены в настройках.
+     */
     private fun saveTimingsToDB() {
         activityScope.launch(Dispatchers.IO) {
             try {
-                val itemEntity = db.videoItemDao().getById(videoItemId) ?: return@launch
-                val domainItem = itemEntity.toDomain(this@VideoPlayerActivity)
-                domainItem.timings.clear()
-                domainItem.timings.addAll(timings)
-                db.videoItemDao().update(domainItem.toEntity())
+                val tArr = JSONArray()
+                timings.forEach { 
+                    tArr.put(JSONObject().apply { 
+                        put("t", it.time); put("m", it.max); put("s", it.step); put("c", it.curr)
+                        put("mt", it.multType); put("mv", it.multVal); put("en", it.isEnabled) 
+                    }) 
+                }
+                // Используем точечное обновление колонки
+                db.videoItemDao().updateTimings(videoItemId, tArr.toString())
             } catch (e: Exception) { Log.e("VideoPlayer", "Save timings to DB error", e) }
         }
     }
