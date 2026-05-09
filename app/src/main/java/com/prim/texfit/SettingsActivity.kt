@@ -248,7 +248,6 @@ class SettingsActivity : AppCompatActivity() {
     private var exerciseOptions = mutableListOf<ConfigOption>()
     private var sessionMap = mapOf<String, String>()
     private var exerciseMap = mapOf<String, String>()
-    private var activeExercisesOrder = mutableListOf<String>()
 
     private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
@@ -325,7 +324,7 @@ class SettingsActivity : AppCompatActivity() {
                 val domainItems = res.first.map { it.toDomain(this@SettingsActivity) }
                 adapter.submitList(domainItems)
                 
-                updateTopStatus()
+                updateTopStatus(domainItems)
                 
                 val tTime = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_TRAINING_TIME, getString(R.string.time_default)) ?: getString(R.string.time_default)
                 tvSetTime.text = tTime
@@ -402,19 +401,17 @@ class SettingsActivity : AppCompatActivity() {
         return String.format(Locale.US, "%.1f %s", size / 1024.0.pow(digitGroups.toDouble()), units[digitGroups])
     }
 
-    private fun updateTopStatus() {
-        etTopInput.setText(calculateTopInputText(adapter.currentList, exerciseMap))
+    private fun updateTopStatus(items: List<VideoItem>? = null) {
+        etTopInput.setText(calculateTopInputText(items ?: adapter.currentList, exerciseMap))
     }
 
     private fun calculateTopInputText(items: List<VideoItem>, eMap: Map<String, String>): String {
         val activeCompleteItems = items.filter { it.isActive && it.isComplete() }
-        val currentActiveSet = activeCompleteItems.map { it.exerciseId }.toSet()
-        activeExercisesOrder.removeAll { it !in currentActiveSet }
-        currentActiveSet.forEach { if (it !in activeExercisesOrder) activeExercisesOrder.add(it) }
-        if (activeExercisesOrder.isEmpty()) return ""
+        val exerciseIds = activeCompleteItems.map { it.exerciseId }.distinct()
+        if (exerciseIds.isEmpty()) return ""
         val sb = StringBuilder("| ")
         val sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        activeExercisesOrder.forEach { exId ->
+        exerciseIds.forEach { exId ->
             val exName = eMap[exId] ?: "???"
             val num = sharedPrefs.getString("cat_$exId", "000") ?: "000"
             sb.append("$exName $num | ")
