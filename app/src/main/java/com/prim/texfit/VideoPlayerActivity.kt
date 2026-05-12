@@ -424,6 +424,24 @@ class VideoPlayerActivity : Activity() {
     }
 
     private var popup: PopupWindow? = null
+
+    private fun showPopupAdaptive(popup: PopupWindow, anchor: View) {
+        val isTablet = resources.configuration.smallestScreenWidthDp >= 500
+        if (isTablet) {
+            popup.showAsDropDown(anchor)
+        } else {
+            popup.showAtLocation(window.decorView, Gravity.CENTER, 0, 0)
+        }
+    }
+
+    private fun wrapInScrollView(view: View): View {
+        return android.widget.ScrollView(this).apply {
+            addView(view)
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            isVerticalScrollBarEnabled = false
+        }
+    }
+
     private fun showNumericKeypadPopup(target: TextView) {
         val isMinField = target == tvControlMaxMin || target == tvControlStepMin
         val dialogView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12); setBackgroundColor(Color.parseColor("#E0000000")) }
@@ -435,7 +453,9 @@ class VideoPlayerActivity : Activity() {
         fun createKeypadBtn(label: String, onClick: (String) -> Unit): View = Button(this).apply { text = label; textSize = 18f; setTextColor(Color.WHITE); background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg); backgroundTintList = ColorStateList.valueOf(Color.parseColor("#80FFFFFF")); layoutParams = GridLayout.LayoutParams().apply { width = btnSize; height = btnSize; setMargins(4, 4, 4, 4) }; setPadding(0, 0, 0, 0); setOnClickListener { onClick(label) } }
         for (i in 1..9) grid.addView(createKeypadBtn(i.toString(), onDigitClick))
         grid.addView(createKeypadBtn("C") { currentInput = ""; display.text = "" }); grid.addView(createKeypadBtn("0", onDigitClick)); grid.addView(createKeypadBtn("OK") { if (currentInput.isNotEmpty()) { var value = currentInput.toInt(); if (isMinField) { if (value > 90) value = 90 } else { if (value > 59) value = 59 }; target.text = String.format(Locale.US, "%02d", value); syncMaxStepFields(target == tvControlMaxMin || target == tvControlMaxSec); updateExerciseControlsVisibility(pendingEnabled, getMsFromUI(isMax = true) > 0, getMsFromUI(isMax = false) > 0L) }; popup?.dismiss() })
-        dialogView.addView(grid); popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true); popup?.showAsDropDown(target)
+        dialogView.addView(grid)
+        popup = PopupWindow(wrapInScrollView(dialogView), ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        showPopupAdaptive(popup!!, target)
     }
 
     private fun syncMaxStepFields(lastModifiedIsMax: Boolean) {
@@ -448,7 +468,8 @@ class VideoPlayerActivity : Activity() {
         fun createPopupBtn(label: String, color: Int, onClick: () -> Unit): Button = Button(this).apply { text = label; textSize = 14f; setTextColor(Color.WHITE); background = ContextCompat.getDrawable(this@VideoPlayerActivity, R.drawable.btn_round_bg); backgroundTintList = ColorStateList.valueOf(color); setOnClickListener { onClick(); popup?.dismiss() }; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (42 * resources.displayMetrics.density).toInt()).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() } }
         dialogView.addView(createPopupBtn(getString(R.string.reset_all), Color.parseColor("#F57C00")) { timings.forEach { t -> if (currStepConfig == 1) t.curr = if (t.step > 0) -t.step else 0L else t.curr = -1L }; saveTimingsToDB() ; resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_reset), Toast.LENGTH_SHORT).show() })
         dialogView.addView(createPopupBtn(getString(R.string.delete_all), Color.parseColor("#1565C0")) { timings.clear(); addDefaultTimings(player.duration.toInt()); saveTimingsToDB() ; drawTicks(player.duration.toInt()); resetTaskTimer(); updateUIState(); updateExerciseControlsUI(); Toast.makeText(this, getString(R.string.all_timings_deleted), Toast.LENGTH_SHORT).show() })
-        popup = PopupWindow(dialogView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true); popup?.showAsDropDown(anchor)
+        popup = PopupWindow(wrapInScrollView(dialogView), ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        showPopupAdaptive(popup!!, anchor)
     }
 
     private fun setFieldsFromMs(ms: Long, tvMin: TextView, tvSec: TextView) { val totalSec = ms / 1000; tvMin.text = String.format(Locale.US, "%02d", (totalSec / 60).toInt()); tvSec.text = String.format(Locale.US, "%02d", (totalSec % 60).toInt()) }

@@ -21,7 +21,7 @@
         android:focusable="true"
         android:contentDescription="Область клика для управления" />
 
-    <!-- Кнопки управления звуком (справа от центра) -->
+    <!-- Кнопки управления звуком -->
     <LinearLayout
         android:id="@+id/layout_audio_controls"
         android:layout_width="wrap_content"
@@ -56,7 +56,7 @@
             android:contentDescription="Звук таймера" />
     </LinearLayout>
 
-    <!-- Счетчик упражнений с круговым таймером (верхний правый) -->
+    <!-- Счетчик упражнений -->
     <FrameLayout
         android:id="@+id/layout_counter_container"
         android:layout_width="160dp"
@@ -77,13 +77,11 @@
             app:indicatorSize="150dp"
             app:trackThickness="8dp" />
 
-        <!-- Контейнер для риски (палочки), которая делает оборот за время шага -->
         <FrameLayout
             android:id="@+id/layout_stick_container"
             android:layout_width="150dp"
             android:layout_height="150dp"
             android:layout_gravity="center">
-
             <View
                 android:id="@+id/circular_stick"
                 android:layout_width="5dp"
@@ -106,205 +104,210 @@
             android:shadowRadius="4" />
     </FrameLayout>
 
-    <!-- Панель управления упражнением (слева) -->
-    <LinearLayout
+    <!-- ИСПРАВЛЕННАЯ ПАНЕЛЬ: Теперь фон снова компактный -->
+    <ScrollView
         android:id="@+id/layout_exercise_controls"
-        android:layout_width="200dp"
+        android:layout_width="220dp"
         android:layout_height="wrap_content"
-        android:layout_centerVertical="true"
         android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
         android:layout_marginStart="16dp"
-        android:orientation="vertical"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="60dp"
         android:background="#A0000000"
-        android:padding="12dp"
         android:visibility="gone"
         android:clickable="true"
-        android:focusable="true">
-
-        <TextView
-            android:id="@+id/tv_control_segment_label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="00:00 - 00:00"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:gravity="center"
-            android:layout_marginBottom="8dp" />
-
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/sw_exercise_enabled"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/switch_enable"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+        android:focusable="true"
+        android:scrollbars="none">
 
         <LinearLayout
-            android:id="@+id/layout_settings_fields"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="12dp">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/label_limit_max"
-                android:textColor="#CCCCCC"
-                android:textSize="11sp"
-                android:layout_marginTop="8dp" />
-            
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:orientation="horizontal"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_control_max_min"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:background="@android:drawable/editbox_background_normal"
-                    android:gravity="center"
-                    android:text="00"
-                    android:textColor="#000000"
-                    android:textSize="20sp"
-                    android:clickable="true"
-                    android:focusable="true" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=":"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp" />
-                <TextView
-                    android:id="@+id/tv_control_max_sec"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:background="@android:drawable/editbox_background_normal"
-                    android:gravity="center"
-                    android:text="00"
-                    android:textColor="#000000"
-                    android:textSize="20sp"
-                    android:clickable="true"
-                    android:focusable="true" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/label_step_increment"
-                android:textColor="#CCCCCC"
-                android:textSize="11sp"
-                android:layout_marginTop="8dp" />
-            
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:orientation="horizontal"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_control_step_min"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:background="@android:drawable/editbox_background_normal"
-                    android:gravity="center"
-                    android:text="00"
-                    android:textColor="#000000"
-                    android:textSize="20sp"
-                    android:clickable="true"
-                    android:focusable="true" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=":"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp" />
-                <TextView
-                    android:id="@+id/tv_control_step_sec"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:background="@android:drawable/editbox_background_normal"
-                    android:gravity="center"
-                    android:text="00"
-                    android:textColor="#000000"
-                    android:textSize="20sp"
-                    android:clickable="true"
-                    android:focusable="true" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/label_multiplier"
-                android:textColor="#CCCCCC"
-                android:textSize="11sp"
-                android:layout_marginTop="8dp" />
-            <TextView
-                android:id="@+id/tv_control_mult"
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:background="@android:drawable/editbox_background_normal"
-                android:gravity="center"
-                android:text="@string/empty_option"
-                android:textColor="#000000"
-                android:textSize="18sp" />
-
-            <!-- Кнопки Сохранить и Удалить рядом -->
-            <LinearLayout
+                android:id="@+id/tv_control_segment_label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="16dp">
-                <androidx.appcompat.widget.AppCompatButton
-                    android:id="@+id/btn_control_save"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:padding="0dp"
-                    android:text="@string/dialog_save"
-                    android:textColor="#FFFFFF"
-                    android:textSize="12sp"
-                    app:backgroundTint="#669900" />
-                <View
-                    android:layout_width="8dp"
-                    android:layout_height="0dp" />
-                <androidx.appcompat.widget.AppCompatButton
-                    android:id="@+id/btn_control_delete"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:padding="0dp"
-                    android:text="@string/delete"
-                    android:textColor="#FFFFFF"
-                    android:textSize="12sp"
-                    app:backgroundTint="#CC0000" />
-            </LinearLayout>
-
-            <!-- Общие настройки -->
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btn_control_general_settings"
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:layout_marginTop="8dp"
-                android:minHeight="0dp"
-                android:padding="0dp"
-                android:text="@string/btn_general_settings"
+                android:text="00:00 - 00:00"
                 android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                app:backgroundTint="#757575" />
-        </LinearLayout>
-    </LinearLayout>
+                android:textSize="14sp"
+                android:gravity="center"
+                android:layout_marginBottom="8dp" />
 
-    <!-- Контейнер для рисок (прижат к низу, накладывается на SeekBar) -->
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/sw_exercise_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/switch_enable"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:id="@+id/layout_settings_fields"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_limit_max"
+                    android:textColor="#CCCCCC"
+                    android:textSize="11sp"
+                    android:layout_marginTop="8dp" />
+                
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_control_max_min"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@android:drawable/editbox_background_normal"
+                        android:gravity="center"
+                        android:text="00"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=":"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp" />
+                    <TextView
+                        android:id="@+id/tv_control_max_sec"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@android:drawable/editbox_background_normal"
+                        android:gravity="center"
+                        android:text="00"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_step_increment"
+                    android:textColor="#CCCCCC"
+                    android:textSize="11sp"
+                    android:layout_marginTop="8dp" />
+                
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_control_step_min"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@android:drawable/editbox_background_normal"
+                        android:gravity="center"
+                        android:text="00"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=":"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp" />
+                    <TextView
+                        android:id="@+id/tv_control_step_sec"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@android:drawable/editbox_background_normal"
+                        android:gravity="center"
+                        android:text="00"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_multiplier"
+                    android:textColor="#CCCCCC"
+                    android:textSize="11sp"
+                    android:layout_marginTop="8dp" />
+                <TextView
+                    android:id="@+id/tv_control_mult"
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:background="@android:drawable/editbox_background_normal"
+                    android:gravity="center"
+                    android:text="@string/empty_option"
+                    android:textColor="#000000"
+                    android:textSize="18sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="16dp">
+                    <androidx.appcompat.widget.AppCompatButton
+                        android:id="@+id/btn_control_save"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        android:text="@string/dialog_save"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        app:backgroundTint="#669900" />
+                    <View
+                        android:layout_width="8dp"
+                        android:layout_height="0dp" />
+                    <androidx.appcompat.widget.AppCompatButton
+                        android:id="@+id/btn_control_delete"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        android:text="@string/delete"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        app:backgroundTint="#CC0000" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/btn_control_general_settings"
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text="@string/btn_general_settings"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    app:backgroundTint="#757575" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
     <FrameLayout
         android:id="@+id/layout_ticks"
         android:layout_width="match_parent"
@@ -327,7 +330,6 @@
         android:maxHeight="18dp"
         android:progressDrawable="@android:drawable/progress_horizontal" />
 
-    <!-- Секундомер приподнят -->
     <LinearLayout
         android:id="@+id/layout_bottom_stopwatch"
         android:layout_width="140dp"
@@ -342,7 +344,6 @@
         android:focusable="true"
         android:background="@drawable/bg_video_control"
         android:padding="8dp">
-        
         <TextView
             android:id="@+id/tv_bottom_stopwatch_time"
             android:layout_width="wrap_content"
@@ -352,7 +353,6 @@
             android:textSize="28sp"
             android:textStyle="bold"
             android:alpha="1.0" />
-
         <TextView
             android:id="@+id/tv_stopwatch_status_label"
             android:layout_width="wrap_content"
@@ -361,11 +361,10 @@
             android:textColor="#FFFFFF"
             android:textSize="12sp"
             android:textStyle="bold"
-            android:alpha="0.8"
+            android:alpha="0.7"
             android:layout_marginTop="2dp" />
     </LinearLayout>
 
-    <!-- Кнопки Назад / Вперед -->
     <LinearLayout
         android:id="@+id/layout_bottom_controls"
         android:layout_width="match_parent"
@@ -375,9 +374,7 @@
         android:orientation="horizontal"
         android:gravity="bottom|center_horizontal"
         android:weightSum="5">
-
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
-
         <ImageButton
             android:id="@+id/btn_prev"
             android:layout_width="64dp"
@@ -387,9 +384,7 @@
             app:tint="#FFFFFF"
             android:scaleType="fitCenter"
             android:padding="12dp"
-            android:alpha="0.8"
-            android:contentDescription="Предыдущий отрезок" />
-
+            android:alpha="0.8" />
         <ImageButton
             android:id="@+id/btn_fine_back"
             android:layout_width="64dp"
@@ -401,12 +396,8 @@
             android:scaleType="fitCenter"
             android:padding="8dp"
             android:alpha="0.8"
-            android:visibility="gone"
-            android:contentDescription="Тонкая настройка назад" />
-
-        <!-- Новая кнопка Play без учета таймера (64x42 как тонкая настройка) -->
+            android:visibility="gone" />
         <View android:id="@+id/spacer_center_left" android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-        
         <ImageButton
             android:id="@+id/btn_play_no_timer"
             android:layout_width="64dp"
@@ -417,11 +408,8 @@
             android:scaleType="fitCenter"
             android:padding="8dp"
             android:alpha="0.8"
-            android:visibility="gone"
-            android:contentDescription="Играть без таймера" />
-            
+            android:visibility="gone" />
         <View android:id="@+id/spacer_center_right" android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
         <ImageButton
             android:id="@+id/btn_fine_forward"
             android:layout_width="64dp"
@@ -433,9 +421,7 @@
             android:scaleType="fitCenter"
             android:padding="8dp"
             android:alpha="0.8"
-            android:visibility="gone"
-            android:contentDescription="Тонкая настройка вперед" />
-
+            android:visibility="gone" />
         <ImageButton
             android:id="@+id/btn_next"
             android:layout_width="64dp"
@@ -445,9 +431,7 @@
             app:tint="#FFFFFF"
             android:scaleType="fitCenter"
             android:padding="12dp"
-            android:alpha="0.8"
-            android:contentDescription="Следующий отрезок" />
-
+            android:alpha="0.8" />
         <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="0.5" />
     </LinearLayout>
 
@@ -461,7 +445,6 @@
         android:orientation="vertical"
         android:gravity="center"
         android:visibility="gone">
-
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -487,8 +470,7 @@
         android:scaleType="fitCenter"
         android:padding="16dp"
         android:alpha="0.8"
-        android:visibility="gone"
-        android:contentDescription="Остановить" />
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/tv_time"
